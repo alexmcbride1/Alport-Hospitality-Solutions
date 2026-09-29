@@ -1,6 +1,3 @@
-"""Tronc approvals and Yapily bulk payments. Register after existing app routes.
-No payroll tax engine: final deductions must come from the venue's payroll system.
-"""
 import calendar
 import csv
 import io
