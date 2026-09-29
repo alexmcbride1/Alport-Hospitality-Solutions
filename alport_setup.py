@@ -58,13 +58,20 @@ def register_setup(app, host):
   try:return json.loads(cipher().decrypt(s.encode()))
   except tc.TillError:raise
   except Exception:raise tc.TillError('Stored connection cannot be decrypted. Restore the original TILL_DATA_KEY.') from None
+ def setup_access(u):
+  sub=host['subscription_for'](u['organisation_id'])
+  if sub and sub.get('status')=='Active':return True
+  # Set only after company-admin credentials are verified by /subscribe.
+  # Keep the preview grant bound to that organisation and signed session.
+  if session.get('billing_preview_admin') is not True:return False
+  try:return int(session.get('billing_preview_bypass_org') or 0)==int(u['organisation_id'])
+  except (TypeError,ValueError):return False
  def context():
   u,s=host['user'](),host['current_site']()
   if not u:abort(401)
   if not s or s['organisation_id']!=u['organisation_id']:abort(403)
   if u['role'] not in ('Owner','Admin','General Manager','Manager'):abort(403)
-  sub=host['subscription_for'](u['organisation_id'])
-  if not sub or sub.get('status')!='Active':abort(403,description='Activate your subscription before venue setup.')
+  if not setup_access(u):abort(403,description='Activate your subscription or use authorised company-admin preview before venue setup.')
   return u,s
  @bp.before_request
  def guard():
@@ -247,8 +254,7 @@ def register_setup(app, host):
  def needs_setup():
   u=host['user']();s=host['current_site']()
   if not u or not s or u['role'] not in ('Owner','Admin','General Manager','Manager'):return False
-  sub=host['subscription_for'](u['organisation_id'])
-  if not sub or sub.get('status')!='Active':return False
+  if not setup_access(u):return False
   r=query('SELECT data FROM alport_setup_progress WHERE organisation_id=%s AND site_id=%s',(u['organisation_id'],s['id']),True)
   return not (r and value(r['data']).get('dismissed'))
  app.extensions['alport_needs_setup']=needs_setup
