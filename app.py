@@ -4029,6 +4029,10 @@ def market():
     )
 
 
+from alport_payments import register_payments
+register_payments(app, globals())
+
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
