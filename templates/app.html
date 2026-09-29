@@ -41,6 +41,7 @@ main{padding:24px;max-width:1250px;width:100%;margin:auto}.view{display:none}.vi
 <body><div class="app">
 <header class="top"><a class="logo" href="/" aria-label="Alport Hospitality Solutions home"><img src="/static/alport-logo.svg" alt="Alport Hospitality Solutions"></a><div class="site"><b>{{organisation.name}}</b>{{site.name}}</div></header>
 <div class="layout"><aside>
+<a class="navbtn" href="/setup">Setup &amp; Till connections</a>
 <button class="navbtn active" data-view="dashboard">Dashboard</button>
 <div class="navgroup">Operations</div><button class="navbtn" data-view="bookings">Bookings & Guests</button><button class="navbtn" data-view="sales">Sales</button><button class="navbtn" data-view="stock">Stock</button><button class="navbtn" data-view="purchasing">Purchasing</button><button class="navbtn" data-view="menu">Menu & Costing</button>
 <a class="navbtn" href="/money" style="display:block;text-decoration:none">Payments &amp; Tronc</a><div class="navgroup">People</div><button class="navbtn" data-view="staff">Staff</button><button class="navbtn" data-view="shifts">Shifts & Rota</button><button class="navbtn" data-view="payroll">Payroll</button>
@@ -434,5 +435,6 @@ async function saveBookingSession(e){e.preventDefault();try{await api('/api/book
 async function deleteBookingSession(id){try{await api('/api/bookings/sessions/'+id,{method:'DELETE'});loadBookingSettings()}catch(e){toast(e.message)}}
 async function loadRotaBookingDemand(){try{let start=new Date(),end=new Date();end.setDate(start.getDate()+6);let d=await api('/api/bookings/rota-demand?start='+start.toISOString().slice(0,10)+'&end='+end.toISOString().slice(0,10)),days={};d.demand.forEach(x=>{days[x.booking_date]=(days[x.booking_date]||0)+Number(x.covers)});$('rotaBookingDemand').innerHTML=Array.from({length:7},(_,i)=>{let dt=new Date(start);dt.setDate(start.getDate()+i);let key=dt.toISOString().slice(0,10);return `<div class="rota-day"><b>${dt.toLocaleDateString('en-GB',{weekday:'short'})}</b><strong>${days[key]||0}</strong><div class="small">booked covers</div></div>`}).join('')}catch(e){toast(e.message)}}
 
-loadDash();
+const setupSection=new URLSearchParams(location.search).get('setup_section');
+if(['dashboard','sites','purchasing','menu','stock','staff','bookings'].includes(setupSection)){nav(setupSection);}else{loadDash();}
 </script></body></html>
