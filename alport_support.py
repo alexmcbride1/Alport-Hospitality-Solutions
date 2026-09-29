@@ -1,260 +1,182 @@
-import os, json, secrets, hashlib, base64
-from datetime import datetime, timedelta, timezone, date
-from urllib.parse import urlencode
-from zoneinfo import ZoneInfo
-from flask import Blueprint, request, session, jsonify, redirect, render_template, abort
-from cryptography.fernet import Fernet
+import hashlib, hmac, secrets, os
+from datetime import datetime, timezone, timedelta
+from urllib.parse import urlsplit
+from flask import Blueprint, request, session, render_template, redirect, abort, jsonify
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import click
-import till_connectors as tc
 
-STEPS = [
- ('welcome','How Alport works',None,'Review how sales, stock, purchasing, staff and payments fit together.'),
- ('venue','Venue details','sites','Venue-specific reporting needs the correct site and address.'),
- ('till','Connect your till',None,'Automatic sales and tip imports need a verified till connection and a successful import.'),
- ('suppliers','Suppliers','purchasing','Purchasing needs your suppliers, contacts and payment terms.'),
- ('menu','Menu and recipes','menu','Ingredient demand requires complete recipes and explicit till-item mappings. Mapping and forecasting are a later release.'),
- ('stock','Opening stock','stock','Stock estimates need an accurate opening count and ingredient units.'),
- ('staff','Staff and payroll','staff','Payroll needs staff records, approved hours, pay rates and payroll checks.'),
- ('banking','Banking and tronc','money','Payments require verified recipients and bank authorisation. Tronc still requires allocation and manager approval.'),
- ('bookings','Bookings and demand','bookings','Bookings improve demand context. Weather, event adjustments and suggested orders are a later release.'),
-]
-SCHEMA = '''
-CREATE TABLE IF NOT EXISTS alport_setup_progress (
- organisation_id BIGINT NOT NULL, site_id BIGINT NOT NULL, data JSONB NOT NULL DEFAULT '{}'::jsonb,
- PRIMARY KEY(organisation_id,site_id));
-CREATE TABLE IF NOT EXISTS alport_till_connections (
- id BIGSERIAL PRIMARY KEY, organisation_id BIGINT NOT NULL, site_id BIGINT NOT NULL,
- provider TEXT NOT NULL, account TEXT NOT NULL, location TEXT NOT NULL, label TEXT NOT NULL,
- secret TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Verified - awaiting import',
- last_sync TEXT, error TEXT NOT NULL DEFAULT '', UNIQUE(organisation_id,provider,account,location));
-CREATE TABLE IF NOT EXISTS alport_till_auth (
- state TEXT PRIMARY KEY, organisation_id BIGINT NOT NULL, site_id BIGINT NOT NULL,
- user_id BIGINT NOT NULL, provider TEXT NOT NULL, expires TEXT NOT NULL, secret TEXT, locations JSONB);
-CREATE TABLE IF NOT EXISTS alport_till_sales (
- connection_id BIGINT NOT NULL REFERENCES alport_till_connections(id), external_id TEXT NOT NULL,
- sale_date TEXT NOT NULL, data JSONB NOT NULL, PRIMARY KEY(connection_id,external_id));
-CREATE INDEX IF NOT EXISTS alport_till_sales_day ON alport_till_sales(sale_date);
+COOKIE_NAME='alport_cookie_preferences'
+COOKIE_VERSION=1
+COOKIE_AGE=180*24*60*60
+STATUSES=('New','Investigating','Resolved','Closed')
+SCHEMA='''
+CREATE TABLE IF NOT EXISTS alport_bug_reports (
+ reference TEXT PRIMARY KEY, organisation_id BIGINT, site_id BIGINT, user_id BIGINT,
+ title TEXT NOT NULL, steps TEXT NOT NULL, expected TEXT NOT NULL, actual TEXT NOT NULL,
+ page TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'New',
+ admin_notes TEXT NOT NULL DEFAULT '', email_status TEXT NOT NULL DEFAULT 'Pending', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS alport_bug_reports_created ON alport_bug_reports(created_at);
+CREATE TABLE IF NOT EXISTS alport_bug_limits (
+ actor TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS alport_bug_limits_actor ON alport_bug_limits(actor,created_at);
 '''
 
-def now(): return datetime.now(timezone.utc)
-def dump(x): return json.dumps(x, allow_nan=False)
-def value(x): return json.loads(x) if isinstance(x,str) else x
+def now():return datetime.now(timezone.utc).isoformat()
+def safe_page(raw):
+ # Never retain query strings or fragments (OAuth codes / reservation tokens).
+ try:path=urlsplit(str(raw)).path
+ except ValueError:return ''
+ if not path.startswith('/') or path.startswith('//'):return ''
+ return path[:200]
 
-def register_setup(app, host):
- db=host['conn']; bp=Blueprint('alport_setup',__name__)
+def register_support(app,host):
+ db=host['conn'];bp=Blueprint('alport_support',__name__)
  with db() as c:
-  for statement in SCHEMA.split(';'):
-   if statement.strip(): c.execute(statement)
- def query(sql,args=(),one=False):
-  with db() as c:
-   r=c.execute(sql,args);return r.fetchone() if one else r.fetchall()
- def cipher():
-  key=os.getenv('TILL_DATA_KEY','')
-  if not key:raise tc.TillError('Administrator must set a permanent TILL_DATA_KEY before connecting tills.')
-  try:return Fernet(key.encode())
-  except Exception:raise tc.TillError('TILL_DATA_KEY is not a valid Fernet key.') from None
- def encrypt(d):return cipher().encrypt(dump(d).encode()).decode()
- def decrypt(s):
-  try:return json.loads(cipher().decrypt(s.encode()))
-  except tc.TillError:raise
-  except Exception:raise tc.TillError('Stored connection cannot be decrypted. Restore the original TILL_DATA_KEY.') from None
- def setup_access(u):
-  sub=host['subscription_for'](u['organisation_id'])
-  if sub and sub.get('status')=='Active':return True
-  # Set only after company-admin credentials are verified by /subscribe.
-  # Keep the preview grant bound to that organisation and signed session.
-  if session.get('billing_preview_admin') is not True:return False
-  try:return int(session.get('billing_preview_bypass_org') or 0)==int(u['organisation_id'])
-  except (TypeError,ValueError):return False
- def context():
-  u,s=host['user'](),host['current_site']()
-  if not u:abort(401)
-  if not s or s['organisation_id']!=u['organisation_id']:abort(403)
-  if u['role'] not in ('Owner','Admin','General Manager','Manager'):abort(403)
-  if not setup_access(u):abort(403,description='Activate your subscription or use authorised company-admin preview before venue setup.')
-  return u,s
+  for sql in SCHEMA.split(';'):
+   if sql.strip():c.execute(sql)
+ signer=URLSafeTimedSerializer(app.secret_key,salt='alport-cookie-notice-v1')
+ def acknowledged():
+  try:
+   d=signer.loads(request.cookies.get(COOKIE_NAME,''),max_age=COOKIE_AGE)
+   return isinstance(d,dict) and d.get('version')==COOKIE_VERSION and d.get('necessary') is True
+  except (BadSignature,SignatureExpired):return False
+ def token():
+  session.setdefault('support_csrf',secrets.token_urlsafe(32));return session['support_csrf']
+ def admin():return host['company_admin_logged_in']()
+ def render(mode,**kwargs):
+  return render_template('support.html',mode=mode,csrf=token(),statuses=STATUSES,admin=admin(),**kwargs)
  @bp.before_request
  def guard():
-  context()
-  if request.content_length and request.content_length>16384:abort(413)
+  if request.content_length and request.content_length>24000:abort(413)
   if request.method=='POST':
-   token=session.get('setup_csrf')
-   if not token or not secrets.compare_digest(token,request.headers.get('X-Setup-CSRF','')):abort(403)
- @bp.errorhandler(tc.TillError)
- def problem(e):return jsonify(error=str(e)),400
- def scope():
-  u,s=context();return u['organisation_id'],s['id']
- def progress():
-  r=query('SELECT data FROM alport_setup_progress WHERE organisation_id=%s AND site_id=%s',scope(),True)
-  return value(r['data']) if r else {}
- def save_progress(d):
-  with db() as c:c.execute('INSERT INTO alport_setup_progress(organisation_id,site_id,data) VALUES(%s,%s,%s::jsonb) ON CONFLICT(organisation_id,site_id) DO UPDATE SET data=excluded.data',(*scope(),dump(d)))
- def connrow(cid):
-  r=query('SELECT * FROM alport_till_connections WHERE id=%s AND organisation_id=%s AND site_id=%s',(cid,*scope()),True)
-  if not r:abort(404)
-  return r
- def redirect_uri(provider):
-  base=os.getenv('PUBLIC_BASE_URL','').rstrip('/')
-  if not base.startswith('https://') or '?' in base or '#' in base:raise tc.TillError('Administrator must set PUBLIC_BASE_URL to the HTTPS Alport address.')
-  return base+'/setup/tills/callback/'+provider
- def authrow(state):
-  u,s=context()
-  r=query('SELECT * FROM alport_till_auth WHERE state=%s AND organisation_id=%s AND site_id=%s AND user_id=%s',(hashlib.sha256(state.encode()).hexdigest(),u['organisation_id'],s['id'],u['id']),True)
-  if not r or datetime.fromisoformat(r['expires'])<now():raise tc.TillError('Connection request expired or belongs to another session. Start again.')
-  if not secrets.compare_digest(session.get('till_state',''),state):raise tc.TillError('Connection session changed. Start again.')
-  return r
- def pending(provider,token,state=None):
-  token['_environment']=tc.square_base() if provider=='square' else tc.ls_base() if provider=='lightspeed' else 'production'
-  loc=tc.locations(provider,token['access_token'])
-  if not loc:raise tc.TillError('No accessible locations were returned by this provider.')
-  u,s=context();state=state or secrets.token_urlsafe(32)
+   sent=request.headers.get('X-Support-CSRF') or request.form.get('csrf','')
+   if not session.get('support_csrf') or not hmac.compare_digest(str(sent),session['support_csrf']):abort(403)
+ @bp.get('/cookies')
+ def cookies():return render('cookies',saved=acknowledged(),session_cookie=app.config.get('SESSION_COOKIE_NAME','session'),cookie_name=COOKIE_NAME)
+ @bp.post('/cookies/preferences')
+ def preferences():
+  action=request.form.get('action')
+  if action not in ('necessary','reset'):abort(400)
+  response=jsonify(ok=True) if request.headers.get('X-Requested-With')=='AlportSupport' else redirect('/cookies',303)
+  if action=='reset':response.delete_cookie(COOKIE_NAME,path='/',secure=app.config.get('SESSION_COOKIE_SECURE',False),httponly=True,samesite='Lax')
+  else:response.set_cookie(COOKIE_NAME,signer.dumps({'version':COOKIE_VERSION,'necessary':True}),max_age=COOKIE_AGE,secure=app.config.get('SESSION_COOKIE_SECURE',False),httponly=True,samesite='Lax',path='/')
+  return response
+ def notify_report(ref):
+  with db() as c:row=c.execute('SELECT * FROM alport_bug_reports WHERE reference=%s',(ref,)).fetchone()
+  if not row:return
+  recipient=os.environ.get('SUPPORT_EMAIL','').strip()
+  delivery='Not configured'
+  if recipient and host.get('send_alport_email'):
+   body='\n'.join([
+    'New Alport bug report: '+ref,'Title: '+row['title'],
+    'Contact email: '+(row['email'] or 'Not supplied'),
+    'Organisation: '+str(row['organisation_id'] or 'Public visitor'),
+    'Site: '+str(row['site_id'] or 'Not supplied'),
+    'Page: '+(row['page'] or 'Not supplied'),
+    '', 'Steps to reproduce:',row['steps'],'',
+    'Expected:',row['expected'] or 'Not supplied','',
+    'What happened:',row['actual'],'',
+    'Review this report in Alport company admin → Bug reports.'])
+   try:
+    result=host['send_alport_email'](recipient,'Alport bug report '+ref,body)
+    delivery='Sent' if result.get('ok') else 'Failed or unconfirmed'
+   except Exception:delivery='Failed or unconfirmed'
+  with db() as c:c.execute('UPDATE alport_bug_reports SET email_status=%s WHERE reference=%s',(delivery,ref))
+ def form(error=None,values=None,code=200):
+  session.setdefault('bug_reference','ALP-'+secrets.token_hex(8).upper())
+  return render('report',error=error,values=values or {},reference=session['bug_reference']),code
+ @bp.get('/report-bug')
+ def report_page():return form(values={'page':safe_page(request.args.get('page',''))})
+ @bp.post('/report-bug')
+ def report():
+  fields={k:(request.form.get(k) or '').strip() for k in ('title','steps','expected','actual','page','email')}
+  limits={'title':160,'steps':5000,'expected':2000,'actual':3000,'page':200,'email':200}
+  if any(len(fields[k])>n for k,n in limits.items()):return form('One of the fields is too long. Shorten it and try again.',fields,400)
+  if not all(fields[k] for k in ('title','steps','actual')):return form('Add a title, steps to reproduce and what happened.',fields,400)
+  if fields['email'] and ('@' not in fields['email'] or any(c.isspace() for c in fields['email'])):return form('Enter a valid contact email or leave it blank.',fields,400)
+  if request.form.get('website'):return form('Unable to submit this report. Please try again.',fields,400)
+  ref=request.form.get('reference','')
+  if not ref or not hmac.compare_digest(ref,session.get('bug_reference','')):return form('This form expired. Submit the refreshed form below.',fields,400)
+  u=host['user']();s=host['current_site']() if u else None
+  if s and s['organisation_id']!=u['organisation_id']:s=None
+  fields['page']=safe_page(fields['page'])
+  # HMAC prevents reversible IP hashes. No raw IP or browser fingerprint is saved.
+  def digest(x):return hmac.new(str(app.secret_key).encode(),x.encode(),hashlib.sha256).hexdigest()
+  ip=digest('ip:'+str(request.remote_addr or 'unknown'))
+  actor=digest('user:'+str(u['id'])) if u else digest('session:'+token())
+  cutoff=(datetime.now(timezone.utc)-timedelta(hours=1)).isoformat()
   with db() as c:
-   c.execute('DELETE FROM alport_till_auth WHERE expires<%s',(now().isoformat(),))
-   c.execute('INSERT INTO alport_till_auth(state,organisation_id,site_id,user_id,provider,expires,secret,locations) VALUES(%s,%s,%s,%s,%s,%s,%s,%s::jsonb) ON CONFLICT(state) DO UPDATE SET secret=excluded.secret,locations=excluded.locations', (hashlib.sha256(state.encode()).hexdigest(),u['organisation_id'],s['id'],u['id'],provider,(now()+timedelta(minutes=15)).isoformat(),encrypt(token),dump(loc)))
-  session['till_state']=state
-  return state
- @bp.get('/setup')
- def page():
-  session.setdefault('setup_csrf',secrets.token_urlsafe(32));u,s=context()
-  return render_template('setup.html',csrf=session['setup_csrf'],site=s,steps=STEPS)
- @bp.get('/api/setup')
- def overview():
-  rows=query('SELECT id,provider,label,status,last_sync,error FROM alport_till_connections WHERE organisation_id=%s AND site_id=%s',scope())
-  providers=[{'id':k,'name':v['name'],'ready':k=='eposnow' or all(tc.credentials(k)),'auth':v['auth']} for k,v in tc.PROVIDERS.items()]
-  return jsonify(progress=progress(),connections=rows,providers=providers)
- @bp.post('/api/setup/progress')
- def set_progress():
-  d=request.get_json(silent=True) or {};key=d.get('step');status=d.get('status')
-  if key not in [x[0] for x in STEPS] or status not in ('reviewed','skipped','pending'):raise tc.TillError('Choose a valid setup step and status.')
-  if key=='till' and status=='reviewed':
-   if not query("SELECT id FROM alport_till_connections WHERE organisation_id=%s AND site_id=%s AND status='Imported - reconcile totals'",scope()):raise tc.TillError('Import till data successfully before marking this step reviewed.')
-  p=progress();p[key]=status;save_progress(p);return jsonify(ok=True)
- @bp.post('/api/setup/finish')
- def finish():
-  p=progress()
-  if any(p.get(x[0]) not in ('reviewed','skipped') for x in STEPS):raise tc.TillError('Review or explicitly skip each step first.')
-  p['dismissed']=True;save_progress(p);return jsonify(ok=True)
- @bp.post('/api/setup/tills/start')
- def start():
-  d=request.get_json(silent=True) or {};provider=d.get('provider')
-  if provider not in tc.PROVIDERS:raise tc.TillError('Choose a supported till provider.')
-  cipher()
-  if provider=='eposnow':
-   key,secret=str(d.get('key','')).strip(),str(d.get('secret','')).strip()
-   if not key or not secret or len(key)+len(secret)>4096:raise tc.TillError('Enter the API key and secret supplied by Epos Now.')
-   state=pending(provider,{'access_token':base64.b64encode((key+':'+secret).encode()).decode()})
-   return jsonify(url='/setup?select='+state)
-  cid,secret=tc.credentials(provider)
-  if not cid or not secret:raise tc.TillError('This provider awaits administrator application approval and configuration.')
-  state=secrets.token_urlsafe(32);u,s=context();session['till_state']=state
+   # Fixed ordering protects parallel submissions and prevents limit races.
+   for key in sorted({ip,actor}):c.execute('SELECT pg_advisory_xact_lock(%s)',(int(key[:15],16),))
+   existing=c.execute('SELECT reference FROM alport_bug_reports WHERE reference=%s',(ref,)).fetchone()
+   if not existing:
+    for key,limit in ((ip,30),(actor,5)):
+     count=c.execute('SELECT COUNT(*) AS n FROM alport_bug_limits WHERE actor=%s AND created_at>%s',(key,cutoff)).fetchone()['n']
+     if count>=limit:
+      response,status=form('Too many reports in the last hour. Please try again later.',fields,429)
+      return response,status,{'Retry-After':'3600'}
+    stamp=now()
+    c.execute('INSERT INTO alport_bug_reports(reference,organisation_id,site_id,user_id,title,steps,expected,actual,page,email,created_at,updated_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(ref,u['organisation_id'] if u else None,s['id'] if s else None,u['id'] if u else None,fields['title'],fields['steps'],fields['expected'],fields['actual'],fields['page'],fields['email'],stamp,stamp))
+    for key in {ip,actor}:c.execute('INSERT INTO alport_bug_limits(actor,created_at) VALUES(%s,%s)',(key,stamp))
+    c.execute('DELETE FROM alport_bug_limits WHERE created_at<%s',(cutoff,))
+  if not existing:notify_report(ref)
+  session['bug_receipt']=ref
+  # Keep the form reference until receipt/new form is visited so retries dedupe.
+  return redirect('/report-bug/sent',303)
+ @bp.get('/report-bug/sent')
+ def sent():
+  ref=session.get('bug_receipt')
+  if not ref:return redirect('/report-bug')
+  if session.get('bug_reference')==ref:session.pop('bug_reference',None)
+  return render('sent',reference=ref)
+ @bp.get('/company-admin/bugs')
+ def inbox():
+  if not admin():return redirect('/company-admin/login')
+  status=request.args.get('status','')
+  if status and status not in STATUSES:abort(400)
+  try:page=max(1,int(request.args.get('page','1')))
+  except ValueError:abort(400)
   with db() as c:
-   c.execute('DELETE FROM alport_till_auth WHERE expires<%s',(now().isoformat(),))
-   c.execute('INSERT INTO alport_till_auth(state,organisation_id,site_id,user_id,provider,expires) VALUES(%s,%s,%s,%s,%s,%s)',(hashlib.sha256(state.encode()).hexdigest(),u['organisation_id'],s['id'],u['id'],provider,(now()+timedelta(minutes=15)).isoformat()))
-  params={'client_id':cid,'response_type':'code','state':state,'scope':tc.PROVIDERS[provider]['scope'],'redirect_uri':redirect_uri(provider)}
-  return jsonify(url=tc.auth_urls(provider)[0]+'?'+urlencode(params))
- @bp.get('/setup/tills/callback/<provider>')
- def callback(provider):
-  state=request.args.get('state','');r=authrow(state)
-  if r['provider']!=provider or r['secret']:raise tc.TillError('Connection request was already used or does not match this provider.')
-  if request.args.get('error') or not request.args.get('code'):raise tc.TillError('Till authorisation was declined. Return to /setup to retry.')
-  # Consume before network exchange, so concurrent callbacks cannot exchange twice.
+   sql='SELECT reference,title,status,email_status,created_at,organisation_id FROM alport_bug_reports'
+   args=()
+   if status:sql+=' WHERE status=%s';args=(status,)
+   reports=c.execute(sql+' ORDER BY created_at DESC LIMIT 51 OFFSET %s',(*args,(page-1)*50)).fetchall()
+  return render('inbox',reports=reports[:50],more=len(reports)>50,page=page,status=status)
+ @bp.route('/company-admin/bugs/<reference>',methods=['GET','POST'])
+ def detail(reference):
+  if not admin():abort(403)
   with db() as c:
-   row=c.execute('DELETE FROM alport_till_auth WHERE state=%s RETURNING state',(r['state'],)).fetchone()
-   if not row:raise tc.TillError('Connection request was already used.')
-  token=tc.exchange(provider,{'grant_type':'authorization_code','code':request.args['code'],'redirect_uri':redirect_uri(provider)})
-  if not token.get('access_token'):raise tc.TillError('Provider did not return an access token.')
-  pending(provider,token,state)
-  return redirect('/setup?select='+state)
- @bp.get('/api/setup/tills/locations')
- def location_options():
-  r=authrow(request.args.get('state',''))
-  if not r['secret']:raise tc.TillError('Complete provider authorisation first.')
-  return jsonify(locations=value(r['locations']),provider=r['provider'])
- @bp.post('/api/setup/tills/select')
- def select():
-  d=request.get_json(silent=True) or {};r=authrow(str(d.get('state','')))
-  if not r['secret']:raise tc.TillError('Complete provider authorisation first.')
-  loc=next((x for x in value(r['locations']) if x['id']==str(d.get('location'))),None)
-  if not loc or loc.get('currency')!='GBP':raise tc.TillError('Choose an authorised GBP location.')
+   row=c.execute('SELECT * FROM alport_bug_reports WHERE reference=%s',(reference,)).fetchone()
+   if not row:abort(404)
+   if request.method=='POST':
+    if request.form.get('action')=='delete':
+     c.execute('DELETE FROM alport_bug_reports WHERE reference=%s',(reference,));return redirect('/company-admin/bugs',303)
+    status=request.form.get('status');notes=request.form.get('notes','').strip()
+    if status not in STATUSES or len(notes)>5000:abort(400)
+    c.execute('UPDATE alport_bug_reports SET status=%s,admin_notes=%s,updated_at=%s WHERE reference=%s',(status,notes,now(),reference))
+    return redirect('/company-admin/bugs/'+reference,303)
+  return render('detail',report=row)
+ @app.cli.command('purge-bug-reports')
+ def purge():
+  """Remove resolved/closed reports unchanged for 90 days; keep open reports."""
   with db() as c:
-   c.execute('SELECT pg_advisory_xact_lock(%s)',(r['organisation_id'],))
-   old=c.execute('SELECT id,site_id FROM alport_till_connections WHERE organisation_id=%s AND provider=%s AND account=%s AND location=%s',(r['organisation_id'],r['provider'],loc['account'],loc['id'])).fetchone()
-   if old:c.execute('SELECT pg_advisory_xact_lock(%s)',(-old['id'],))
-   if old and old['site_id']!=r['site_id']:raise tc.TillError('This till location is already assigned to another Alport site.')
-   used=c.execute('DELETE FROM alport_till_auth WHERE state=%s RETURNING state',(r['state'],)).fetchone()
-   if not used:raise tc.TillError('Connection selection was already used.')
-   c.execute("INSERT INTO alport_till_connections(organisation_id,site_id,provider,account,location,label,secret) VALUES(%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(organisation_id,provider,account,location) DO UPDATE SET secret=excluded.secret,status='Verified - awaiting import',error=''",(r['organisation_id'],r['site_id'],r['provider'],loc['account'],loc['id'],loc['name'],r['secret']))
-  session.pop('till_state',None);return jsonify(ok=True)
- @bp.post('/api/setup/tills/<int:cid>/disconnect')
- def disconnect(cid):
-  connrow(cid)
-  with db() as c:
-   c.execute('SELECT pg_advisory_xact_lock(%s)',(-cid,))
-   c.execute("UPDATE alport_till_connections SET secret='',status='Disconnected',error='' WHERE id=%s",(cid,))
-  return jsonify(ok=True)
- def sync(cid,start,end):
-  # Serialize token rotation, disconnection and imports on this connection.
-  # Network failure raises: the entire transaction rolls back, preserving old data.
-  with db() as c:
-   c.execute('SELECT pg_advisory_xact_lock(%s)',(-cid,))
-   r=c.execute('SELECT * FROM alport_till_connections WHERE id=%s',(cid,)).fetchone()
-   if not r or not r['secret']:raise tc.TillError('Connection is disconnected.')
-   token=decrypt(r['secret'])
-   environment=tc.square_base() if r['provider']=='square' else tc.ls_base() if r['provider']=='lightspeed' else 'production'
-   if token.get('_environment',environment)!=environment:raise tc.TillError('Provider environment changed. Reconnect this till before importing.')
-   if token.get('refresh_token'):
-    fresh=tc.exchange(r['provider'],{'grant_type':'refresh_token','refresh_token':token['refresh_token']})
-    if not fresh.get('access_token'):raise tc.TillError('Provider did not refresh the access token. Reconnect.')
-    token.update(fresh)
-    # Persist rotation independently before fetching, otherwise a failed import
-    # could discard a single-use refresh token and permanently break the link.
-    with db() as separate:separate.execute('UPDATE alport_till_connections SET secret=%s WHERE id=%s',(encrypt(token),cid))
-   rows=tc.fetch_sales(r['provider'],token['access_token'],r['location'],start,end)
-   for sale in rows:
-    c.execute('INSERT INTO alport_till_sales(connection_id,external_id,sale_date,data) VALUES(%s,%s,%s,%s::jsonb) ON CONFLICT(connection_id,external_id) DO UPDATE SET sale_date=excluded.sale_date,data=excluded.data',(cid,sale['id'],datetime.fromisoformat(sale['at']).astimezone(ZoneInfo('Europe/London')).date().isoformat(),dump(sale)))
-   c.execute("UPDATE alport_till_connections SET status='Imported - reconcile totals',last_sync=%s,error='' WHERE id=%s",(now().isoformat(),cid))
-   return len(rows)
- def run_sync(cid,start,end):
-  try:return sync(cid,start,end)
-  except (tc.TillError,ValueError,KeyError,TypeError) as e:
-   message=str(e) if isinstance(e,tc.TillError) else 'Unexpected till data; import rolled back. Ask support to review the adapter.'
-   with db() as c:c.execute('UPDATE alport_till_connections SET error=%s WHERE id=%s',(message,cid))
-   raise tc.TillError(message) from None
- @bp.post('/api/setup/tills/<int:cid>/sync')
- def import_sales(cid):
-  connrow(cid);d=request.get_json(silent=True) or {}
-  try:a=date.fromisoformat(d['start']);b=date.fromisoformat(d['end'])
-  except (KeyError,ValueError,TypeError):raise tc.TillError('Choose valid start and end dates.') from None
-  if not 0<=(b-a).days<=31 or b>now().date():raise tc.TillError('Choose up to 32 days, ending no later than today.')
-  return jsonify(imported=run_sync(cid,a.isoformat()+'T00:00:00Z',(b+timedelta(days=1)).isoformat()+'T00:00:00Z'))
- @bp.get('/api/setup/history')
- def history():
-  try:a=date.fromisoformat(request.args.get('start',''));b=date.fromisoformat(request.args.get('end',''))
-  except ValueError:raise tc.TillError('Choose valid history dates.') from None
-  if not 0<=(b-a).days<=366:raise tc.TillError('Choose up to one year of history.')
-  rows=query('SELECT s.data,s.sale_date FROM alport_till_sales s JOIN alport_till_connections c ON c.id=s.connection_id WHERE c.organisation_id=%s AND c.site_id=%s AND s.sale_date>=%s AND s.sale_date<=%s ORDER BY s.sale_date',(*scope(),a.isoformat(),b.isoformat()))
-  days={};warnings=0
-  for row in rows:
-   x=value(row['data']);day=days.setdefault(row['sale_date'],{'date':row['sale_date'],'sales':0,'gross_pence':0,'tips_pence':0,'service_pence':0})
-   day['sales']+=1
-   for k in ('gross_pence','tips_pence','service_pence'):day[k]+=x[k]
-   warnings+=bool(x['warnings'])
-  return jsonify(days=list(days.values()),warnings=warnings,notice='Unreconciled till ledger. Not posted to finance, stock or payroll. Check source totals, refunds and service charges before use.')
- @app.cli.command('till-sync')
- @click.option('--days',default=3,type=click.IntRange(1,32))
- def scheduled_sync(days):
-  """Run from a scheduler; keeps credentials out of the command line."""
-  rows=query("SELECT c.id FROM alport_till_connections c JOIN subscriptions s ON s.organisation_id=c.organisation_id WHERE c.secret<>'' AND s.status='Active'")
-  failures=0;end=now();start=end-timedelta(days=days)
-  for r in rows:
-   try:click.echo(f"Connection {r['id']}: {run_sync(r['id'],start.isoformat(),end.isoformat())} records")
-   except tc.TillError as e:failures+=1;click.echo(f"Connection {r['id']}: {e}",err=True)
-  if failures:raise click.ClickException(f'{failures} connection(s) failed; previous imports retained.')
+   c.execute("DELETE FROM alport_bug_reports WHERE status IN ('Resolved','Closed') AND updated_at<%s",((datetime.now(timezone.utc)-timedelta(days=90)).isoformat(),))
+   c.execute('DELETE FROM alport_bug_limits WHERE created_at<%s',((datetime.now(timezone.utc)-timedelta(hours=1)).isoformat(),))
+  click.echo('Removed old closed/resolved reports and expired rate-limit records.')
  app.register_blueprint(bp)
- def needs_setup():
-  u=host['user']();s=host['current_site']()
-  if not u or not s or u['role'] not in ('Owner','Admin','General Manager','Manager'):return False
-  if not setup_access(u):return False
-  r=query('SELECT data FROM alport_setup_progress WHERE organisation_id=%s AND site_id=%s',(u['organisation_id'],s['id']),True)
-  return not (r and value(r['data']).get('dismissed'))
- app.extensions['alport_needs_setup']=needs_setup
+ @app.after_request
+ def support_widget(response):
+  if request.endpoint and request.endpoint.startswith('alport_support.'):
+   response.headers['Cache-Control']='private, no-store'
+   response.headers['Referrer-Policy']='same-origin'
+  if response.status_code!=200 or response.mimetype!='text/html' or response.is_streamed or response.direct_passthrough:return response
+  if response.headers.get('Content-Encoding'):return response
+  html=response.get_data(as_text=True);at=html.lower().rfind('</body>')
+  if at<0:return response
+  # Route pattern avoids collecting query parameters or actual URL path tokens.
+  page=request.url_rule.rule if request.url_rule else ''
+  widget=render_template('support_widget.html',show_notice=not acknowledged(),csrf=token(),support_page=page,support_admin=admin())
+  response.set_data(html[:at]+widget+html[at:])
+  response.headers['Cache-Control']='private, no-store'
+  response.headers.pop('ETag',None)
+  return response
