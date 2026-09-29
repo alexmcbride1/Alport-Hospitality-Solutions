@@ -4035,6 +4035,8 @@ from alport_payments import register_payments
 register_payments(app, globals())
 from alport_setup import register_setup
 register_setup(app, globals())
+from alport_support import register_support
+register_support(app, globals())
 
 
 if __name__ == "__main__":
