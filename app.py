@@ -1715,6 +1715,8 @@ def app_home():
     if subscription_blocks_access(sub):
         session.clear()
         return redirect(url_for("login"))
+    if not request.args.get("setup_section") and app.extensions.get("alport_needs_setup", lambda: False)():
+        return redirect("/setup")
     return render_template("app.html", user=u, organisation=org(), site=current_site())
 
 
@@ -4031,6 +4033,8 @@ def market():
 
 from alport_payments import register_payments
 register_payments(app, globals())
+from alport_setup import register_setup
+register_setup(app, globals())
 
 
 if __name__ == "__main__":
