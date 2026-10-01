@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>OrderFlow HQ</title>
+<title>Alport HQ</title>
 
 <style>
 :root{
@@ -378,13 +378,13 @@ tr.clickable:hover{background:#f7faf8}
     .admin{display:none}
 }
 </style>
-</head>
+<link rel="icon" type="image/svg+xml" href="/static/alport-logo.svg"><link rel="stylesheet" href="/static/alport-ui.css?v=20261001"></head>
 
-<body>
+<body class="alport-page page-company-admin">
 
 <header class="top">
     <div>
-        <span class="logo">ORDER<span>FLOW</span></span>
+        <a class="brand-link" href="/" aria-label="Alport home"><img class="brand-image" src="/static/alport-logo.svg" alt="Alport Hospitality Solutions"></a>
         <span class="hq">COMPANY HQ</span>
     </div>
 
@@ -447,9 +447,9 @@ tr.clickable:hover{background:#f7faf8}
 <section id="dashboard" class="view active">
 
     <div class="head">
-        <div class="eyebrow">OrderFlow company management</div>
+        <div class="eyebrow">Alport company management</div>
         <h1>Company dashboard</h1>
-        <p>Your live view across every OrderFlow customer, venue and subscription.</p>
+        <p>Your live view across every Alport customer, venue and subscription.</p>
     </div>
 
     <div class="grid4">
@@ -530,7 +530,7 @@ tr.clickable:hover{background:#f7faf8}
     <div class="head">
         <div class="eyebrow">Accounts</div>
         <h1>Customers</h1>
-        <p>Every hospitality business using OrderFlow.</p>
+        <p>Every hospitality business using Alport.</p>
     </div>
 
     <div class="sectionhead">
@@ -614,9 +614,9 @@ tr.clickable:hover{background:#f7faf8}
 
     <div class="head">
         <div class="eyebrow">Money in</div>
-        <h1>OrderFlow payments</h1>
+        <h1>Alport payments</h1>
         <p>
-            Subscription payments received by OrderFlow —
+            Subscription payments received by Alport —
             separate from customer venue payments.
         </p>
     </div>
@@ -711,7 +711,7 @@ tr.clickable:hover{background:#f7faf8}
     <div class="head">
         <div class="eyebrow">Platform</div>
         <h1>Users</h1>
-        <p>All active and inactive user accounts across OrderFlow.</p>
+        <p>All active and inactive user accounts across Alport.</p>
     </div>
 
     <input
@@ -911,7 +911,7 @@ tr.clickable:hover{background:#f7faf8}
     <div class="section card">
 
         <h2 style="font-size:14px">
-            OrderFlow payment history
+            Alport payment history
         </h2>
 
         <div id="cmPayments"></div>
@@ -930,7 +930,7 @@ tr.clickable:hover{background:#f7faf8}
 
     <div class="sectionhead">
 
-        <b>Record OrderFlow payment</b>
+        <b>Record Alport payment</b>
 
         <button
             class="close"
@@ -1029,7 +1029,7 @@ let customers = [];
 let users = [];
 let overview = {};
 
-const £ = n =>
+const formatGBP = n =>
     '£' + Number(n || 0).toLocaleString(
         'en-GB',
         {
@@ -1126,10 +1126,10 @@ async function loadOverview(){
         await api('/api/company-admin/overview');
 
     kMrr.textContent =
-        £(overview.mrr);
+        formatGBP(overview.mrr);
 
     kArr.textContent =
-        'ARR ' + £(overview.arr);
+        'ARR ' + formatGBP(overview.arr);
 
     kCustomers.textContent =
         overview.organisations;
@@ -1151,19 +1151,19 @@ async function loadOverview(){
         overview.overdue;
 
     kCollected.textContent =
-        £(overview.collected);
+        formatGBP(overview.collected);
 
     rMrr.textContent =
-        £(overview.mrr);
+        formatGBP(overview.mrr);
 
     rArr.textContent =
-        £(overview.arr);
+        formatGBP(overview.arr);
 
     rCollected.textContent =
-        £(overview.collected);
+        formatGBP(overview.collected);
 
     rArpu.textContent =
-        £(
+        formatGBP(
             overview.active
             ? overview.mrr / overview.active
             : 0
@@ -1185,7 +1185,7 @@ function eventHtml(e){
             <b>${esc(e.event_type)}</b>
 
             <div>
-                ${esc(e.organisation_name || 'OrderFlow')}
+                ${esc(e.organisation_name || 'Alport')}
                 ·
                 ${esc(e.detail || '')}
                 ·
@@ -1304,7 +1304,7 @@ function renderCustomers(){
                         </td>
 
                         <td>
-                            ${£(x.monthly_price)}
+                            ${formatGBP(x.monthly_price)}
                         </td>
 
                         <td>
@@ -1316,7 +1316,7 @@ function renderCustomers(){
                         </td>
 
                         <td>
-                            ${£(x.total_paid)}
+                            ${formatGBP(x.total_paid)}
                         </td>
 
                         <td>
@@ -1359,7 +1359,7 @@ function renderSubscriptions(){
                         </td>
 
                         <td>
-                            ${£(x.monthly_price)}
+                            ${formatGBP(x.monthly_price)}
                         </td>
 
                         <td>
@@ -1414,7 +1414,7 @@ function renderRevenue(){
 
                         <span>
                             <b>
-                                ${£(x.monthly_price)}
+                                ${formatGBP(x.monthly_price)}
                             </b>/mo
                         </span>
 
@@ -1489,7 +1489,7 @@ async function openCustomer(id){
             <span>Total paid</span>
 
             <b>
-                ${£(
+                ${formatGBP(
                     d.payments
                     .filter(
                         p =>
@@ -1573,7 +1573,7 @@ async function openCustomer(id){
                     </span>
 
                     <span>
-                        ${£(p.amount)}
+                        ${formatGBP(p.amount)}
                         ${pill(p.status)}
                     </span>
 
@@ -1713,7 +1713,7 @@ async function loadPayments(){
                     </td>
 
                     <td>
-                        ${£(p.amount)}
+                        ${formatGBP(p.amount)}
                     </td>
 
                     <td>
