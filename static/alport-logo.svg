@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="310" height="82" viewBox="0 0 310 82"
+     role="img" aria-labelledby="title">
+  <title id="title">Alport Hospitality Solutions</title>
+
+  <g color="#205b49" transform="translate(0,1) scale(.8)">
+    <circle cx="50" cy="50" r="46"
+            fill="none" stroke="currentColor" stroke-width="2"/>
+
+    <path d="M18 62C30 55 38 54 47 56C57 59 67 63 84 54
+             M18 69C31 63 42 62 51 65C62 68 72 66 84 61
+             M25 55L38 39L47 49L57 35L76 56"
+          fill="none" stroke="currentColor" stroke-width="2"/>
+
+    <circle cx="69" cy="31" r="4" fill="currentColor"/>
+  </g>
+
+  <g fill="#173c2e" font-family="Arial,Helvetica,sans-serif">
+    <text x="94" y="40" font-size="30"
+          font-weight="700" letter-spacing="4">ALPORT</text>
+    <text x="95" y="60" font-size="9"
+          letter-spacing="2">HOSPITALITY SOLUTIONS</text>
+  </g>
+</svg>
