@@ -9,15 +9,10 @@
   <style>
    :root{--g:#173d32;--bg:#f5f3ed;--line:#dde5df;--muted:#748079}*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Inter,system-ui,-apple-system,sans-serif;color:#17211d;padding:24px}.wrap{max-width:620px;margin:40px auto}.brand{text-align:center;color:var(--g);font-family:Georgia,serif;letter-spacing:4px;font-size:28px;margin-bottom:22px}.brand small{display:block;font-family:Inter,sans-serif;font-size:9px;letter-spacing:2px;margin-top:7px}.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:28px;box-shadow:0 20px 60px #173d3218}h1{font-family:Georgia,serif;color:var(--g);font-weight:500;margin:0 0 8px}.muted{color:var(--muted);font-size:12px;line-height:1.6}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}.field{display:grid;gap:6px}.full{grid-column:1/-1}label{font-size:10px;font-weight:800}select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff}button{width:100%;padding:13px;border:0;border-radius:10px;background:var(--g);color:#fff;font-weight:800;margin-top:16px}.thanks{text-align:center;padding:28px 0}.thanks b{font-family:Georgia,serif;color:var(--g);font-size:27px}@media(max-width:600px){body{padding:12px}.wrap{margin:18px auto}.card{padding:22px}.grid{grid-template-columns:1fr}.full{grid-column:auto}}
   </style>
- </head>
- <body>
+ <link rel="icon" type="image/svg+xml" href="/static/alport-logo.svg"><link rel="stylesheet" href="/static/alport-ui.css?v=20261001"></head>
+ <body class="alport-page page-booking-feedback">
   <div class="wrap">
-   <div class="brand">
-    ALPORT
-    <small>
-     HOSPITALITY SOLUTIONS
-    </small>
-   </div>
+   <a class="brand-link" href="/" aria-label="Alport home"><img class="brand-image" src="/static/alport-logo.svg" alt="Alport Hospitality Solutions"></a>
    <div class="card">
     {% if submitted %}
     <div class="thanks">
