@@ -129,7 +129,7 @@ def pricing_for(organisation_id, preserve_commitment=True):
     active_sites = max(1, int((sites_row or {}).get("n") or 0))
     active_users = max(0, int((users_row or {}).get("n") or 0))
 
-    # Alport is Â£500 + VAT per active/contracted venue per month. Users are unlimited.
+    # Alport is £500 + VAT per active/contracted venue per month. Users are unlimited.
     base = BASE_PRICE_PER_SITE
     vat_rate = VAT_RATE
     committed_sites = int((sub or {}).get("contracted_sites") or active_sites)
@@ -205,8 +205,8 @@ def record_stripe_payment(organisation_id, invoice):
         return
     total_pence = int(invoice.get("amount_paid") or invoice.get("total") or 0)
     gross = round(total_pence / 100.0, 2)
-    # Stripe base price is VAT-inclusive gross (Â£600 per venue/month).
-    # Commercial pricing is Â£500 + 20% VAT per venue/month.
+    # Stripe base price is VAT-inclusive gross (£600 per venue/month).
+    # Commercial pricing is £500 + 20% VAT per venue/month.
     net = round(gross / (1 + VAT_RATE), 2) if gross else 0
     vat = round(gross - net, 2)
     paid_at = date.today().isoformat()
@@ -241,7 +241,7 @@ def activate_contract_from_checkout(organisation_id, checkout):
     )
     company_event(
         "Contract activated",
-        f"12-month minimum term Â· Â£{p['net']:.2f} + VAT/month Â· ends {end.isoformat()}",
+        f"12-month minimum term · £{p['net']:.2f} + VAT/month · ends {end.isoformat()}",
         organisation_id,
     )
 
@@ -970,11 +970,16 @@ def ensure_training_assignments(employee):
                     (employee["organisation_id"], employee["site_id"], employee["id"], key, module["version"], now()))
 
 
+from alport_inventory import SCHEMA as INVENTORY_SCHEMA, ingredient_cost, resolve_component, number
+
 def init_db():
     with conn() as c:
         with c.cursor() as cur:
             for statement in [x.strip() for x in SCHEMA.split(";") if x.strip()]:
                 cur.execute(statement)
+
+            for statement in INVENTORY_SCHEMA.split(";"):
+                if statement.strip(): cur.execute(statement)
 
             # SaaS billing / 12-month contract fields. ADD COLUMN IF NOT EXISTS
             # keeps existing Render databases safe during deployment.
@@ -1015,9 +1020,9 @@ def init_db():
                 "ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS deposit_min_party INTEGER NOT NULL DEFAULT 1",
                 "ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS cancellation_policy TEXT DEFAULT ''",
                 "ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS logo_url TEXT DEFAULT ''",
-                "ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS confirmation_subject TEXT DEFAULT 'Your reservation is confirmed â {{venue_name}}'",
+                "ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS confirmation_subject TEXT DEFAULT 'Your reservation is confirmed — {{venue_name}}'",
                 "ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS confirmation_message TEXT DEFAULT 'Thank you for choosing {{venue_name}}. We are pleased to confirm your reservation and look forward to welcoming you.'",
-                "ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS review_subject TEXT DEFAULT 'Thank you for dining with us â {{venue_name}}'",
+                "ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS review_subject TEXT DEFAULT 'Thank you for dining with us — {{venue_name}}'",
                 "ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS review_message TEXT DEFAULT 'Thank you for joining us. We would really appreciate hearing about your experience.'",
                 "ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS stripe_connect_account_id TEXT DEFAULT ''",
                 "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS manage_token TEXT DEFAULT ''",
@@ -1044,7 +1049,7 @@ def init_db():
 init_db()
 
 # Normalize the commercial model for existing database rows. Stripe recurring price
-# itself is controlled by STRIPE_BASE_PRICE_ID and must point to the Â£600 gross price.
+# itself is controlled by STRIPE_BASE_PRICE_ID and must point to the £600 gross price.
 try:
     execute("UPDATE subscriptions SET base_price=?,extra_user_price=?,included_users_per_site=?", (BASE_PRICE_PER_SITE, 0.0, 0))
     execute("UPDATE subscriptions SET monthly_price=? * GREATEST(1,COALESCE(contracted_sites,1))", (BASE_PRICE_PER_SITE,))
@@ -1775,8 +1780,8 @@ def add_login_user():
         )
     except psycopg.IntegrityError:
         return jsonify(error="That email is already registered."), 409
-    audit("Created", "login_user", user_id, f"{name} Â· {role}")
-    company_event("Alport Hospitality Solutions user added", f"{name} Â· {email}", organisation_id)
+    audit("Created", "login_user", user_id, f"{name} · {role}")
+    company_event("Alport Hospitality Solutions user added", f"{name} · {email}", organisation_id)
     return jsonify(ok=True, id=user_id)
 
 
@@ -1847,7 +1852,7 @@ def add_site():
                WHERE organisation_id=?""",
             (new_sites, new_contracted_users, new_net, u["organisation_id"]),
         )
-        company_event("Restaurant added", f"Contract value now Â£{new_net:.2f} + VAT/month", u["organisation_id"])
+        company_event("Restaurant added", f"Contract value now £{new_net:.2f} + VAT/month", u["organisation_id"])
     return jsonify(ok=True, id=site_id)
 
 
@@ -2679,8 +2684,20 @@ def get_menu():
            ORDER BY menu_item_id,sort_order,id""",
         (u["organisation_id"], s["id"]),
     )
+    stocks = {int(x['id']): x for x in q("SELECT * FROM stock_items WHERE organisation_id=? AND site_id=? AND active=1", (u['organisation_id'],s['id']))}
     grouped = {}
     for row in component_rows:
+        row = dict(row)
+        row['cost_warning'] = ''
+        if row.get('stock_item_id'):
+            stock = stocks.get(int(row['stock_item_id']))
+            try:
+                if not stock: raise ValueError('Linked ingredient unavailable; saved cost shown.')
+                row['component_cost'] = ingredient_cost(row['quantity'],row['unit'],stock)
+            except ValueError as exc:
+                row['cost_warning'] = str(exc)
+        else:
+            row['cost_warning'] = 'Not linked to stock; manual cost.' 
         grouped.setdefault(int(row["menu_item_id"]), []).append(dict(row))
     menu = []
     for row in items:
@@ -2711,11 +2728,18 @@ def _normalise_menu_components(raw):
             component_cost = float((part or {}).get("component_cost") or 0)
         except Exception:
             raise ValueError("Ingredient quantities and costs must be valid numbers")
+        number(quantity, 'Ingredient quantity')
+        number(component_cost, 'Ingredient cost')
         if quantity < 0 or component_cost < 0:
             raise ValueError("Ingredient quantities and costs cannot be negative")
         unit = str((part or {}).get("unit") or "g").strip()[:30]
         notes = str((part or {}).get("notes") or "").strip()[:500]
+        stock = resolve_component(part, user()['organisation_id'], current_site()['id'], q)
+        if stock:
+            component_cost = ingredient_cost(quantity,unit,stock)
+            name = stock['name']
         components.append({
+            "stock_item_id": stock['id'] if stock else None,
             "name": name,
             "quantity": quantity,
             "unit": unit,
@@ -2757,6 +2781,8 @@ def add_menu():
         return jsonify(error=str(exc)), 400
     except Exception:
         return jsonify(error="Invalid menu values"), 400
+    if not __import__('math').isfinite(price) or not __import__('math').isfinite(portion_weight):
+        return jsonify(error="Menu values must be finite numbers"),400
     if price <= 0 or portion_weight < 0:
         return jsonify(error="Selling price must be positive and portion weight cannot be negative"), 400
     recipe_cost = round(sum(x["component_cost"] for x in components), 2)
@@ -2771,9 +2797,9 @@ def add_menu():
             menu_id = cur.fetchone()["id"]
             for part in components:
                 cur.execute(
-                    """INSERT INTO menu_components(organisation_id,site_id,menu_item_id,component_name,quantity,unit,component_cost,notes,sort_order)
-                       VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-                    (u["organisation_id"], s["id"], menu_id, part["name"], part["quantity"], part["unit"], part["component_cost"], part["notes"], part["sort_order"]),
+                    """INSERT INTO menu_components(organisation_id,site_id,menu_item_id,component_name,quantity,unit,component_cost,notes,sort_order,stock_item_id)
+                       VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (u["organisation_id"], s["id"], menu_id, part["name"], part["quantity"], part["unit"], part["component_cost"], part["notes"], part["sort_order"], part["stock_item_id"]),
                 )
     audit("Created", "menu_item", menu_id, f"{menu_type} / {menu_section} / {name}")
     return jsonify(ok=True, id=menu_id, recipe_cost=recipe_cost)
@@ -2804,6 +2830,8 @@ def update_menu(menu_id):
         return jsonify(error=str(exc)), 400
     except Exception:
         return jsonify(error="Invalid menu values"), 400
+    if not __import__('math').isfinite(price) or not __import__('math').isfinite(portion_weight):
+        return jsonify(error="Menu values must be finite numbers"),400
     if price <= 0 or portion_weight < 0:
         return jsonify(error="Selling price must be positive and portion weight cannot be negative"), 400
     recipe_cost = round(sum(x["component_cost"] for x in components), 2)
@@ -2817,9 +2845,9 @@ def update_menu(menu_id):
             cur.execute("DELETE FROM menu_components WHERE menu_item_id=%s AND organisation_id=%s AND site_id=%s", (menu_id, u["organisation_id"], s["id"]))
             for part in components:
                 cur.execute(
-                    """INSERT INTO menu_components(organisation_id,site_id,menu_item_id,component_name,quantity,unit,component_cost,notes,sort_order)
-                       VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-                    (u["organisation_id"], s["id"], menu_id, part["name"], part["quantity"], part["unit"], part["component_cost"], part["notes"], part["sort_order"]),
+                    """INSERT INTO menu_components(organisation_id,site_id,menu_item_id,component_name,quantity,unit,component_cost,notes,sort_order,stock_item_id)
+                       VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (u["organisation_id"], s["id"], menu_id, part["name"], part["quantity"], part["unit"], part["component_cost"], part["notes"], part["sort_order"], part["stock_item_id"]),
                 )
     audit("Updated", "menu_item", menu_id, f"{menu_type} / {menu_section} / {name}")
     return jsonify(ok=True, id=menu_id, recipe_cost=recipe_cost)
@@ -2940,12 +2968,12 @@ ALLERGENS_14 = [
     "Molluscs", "Mustard", "Nuts", "Peanuts", "Sesame", "Soya", "Sulphur dioxide and sulphites"
 ]
 TEMP_PRESETS = {
-    "Chilled storage": {"max": 8.0, "note": "Legal maximum for foods subject to chill holding requirements in England; Alport Hospitality Solutions recommends operating fridges at 5Â°C or below."},
+    "Chilled storage": {"max": 8.0, "note": "Legal maximum for foods subject to chill holding requirements in England; Alport Hospitality Solutions recommends operating fridges at 5°C or below."},
     "Freezer": {"max": -18.0, "note": "FSA recommended operating target for frozen food; set your documented safe method if different."},
     "Hot holding": {"min": 63.0, "note": "Legal hot-holding minimum in England, subject to applicable exemptions/time controls."},
     "Cooking": {"min": 70.0, "note": "Default Alport Hospitality Solutions verification target only. Record the time/temperature combination required by your documented safe method."},
     "Reheating": {"min": 70.0, "note": "Default Alport Hospitality Solutions verification target only. Food must be reheated thoroughly; use the limit in your documented safe method."},
-    "Delivery chilled": {"max": 8.0, "note": "Use supplier/product requirements where stricter; foods subject to chill holding requirements must remain at 8Â°C or below."},
+    "Delivery chilled": {"max": 8.0, "note": "Use supplier/product requirements where stricter; foods subject to chill holding requirements must remain at 8°C or below."},
     "Cooling": {"note": "No single universal statutory endpoint is imposed here; record the method and target in your HACCP/SFBB safe method."},
     "Other": {"note": "Use the limits defined in your site food-safety management system."},
 }
@@ -3071,8 +3099,8 @@ def save_eho_temperature():
     if result=="Action required":
         execute("""INSERT INTO eho_records(organisation_id,site_id,category,record_date,title,status,details,corrective_action,created_by,created_name,created_at)
                    VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-            (u["organisation_id"],site["id"],"HACCP/SFBB",check_date,f"Temperature exception: {item}","Action required",f"{check_type}: {temp}Â°C",corrective,u["id"],u["name"],now()))
-    audit("Recorded", "eho_temperature", row_id, f"{check_type} Â· {item} Â· {temp}Â°C Â· {result}")
+            (u["organisation_id"],site["id"],"HACCP/SFBB",check_date,f"Temperature exception: {item}","Action required",f"{check_type}: {temp}°C",corrective,u["id"],u["name"],now()))
+    audit("Recorded", "eho_temperature", row_id, f"{check_type} · {item} · {temp}°C · {result}")
     return jsonify(ok=True,id=row_id,result=result)
 
 
@@ -3201,7 +3229,7 @@ def bookings_overview():
     for x in active:
         slot = str(x["booking_time"])[:5]
         peak[slot] = peak.get(slot, 0) + int(x["party_size"] or 0)
-    peak_time = max(peak, key=peak.get) if peak else "â"
+    peak_time = max(peak, key=peak.get) if peak else "—"
     return jsonify(date=day, bookings=[dict(x) for x in rows], covers=covers, booking_count=len(active), peak_time=peak_time, peak_covers=peak.get(peak_time,0) if peak else 0)
 
 
@@ -3237,7 +3265,7 @@ def _booking_email_html(site, settings, booking, heading, message, button_label=
     logo=(settings.get("logo_url") or "").strip()
     logo_html=f'<img src="{escape(logo)}" alt="{escape(site.get("name") or "Venue")}" style="max-width:180px;max-height:70px;margin-bottom:24px">' if logo else f'<div style="font-size:22px;font-weight:800;letter-spacing:.08em;margin-bottom:24px">{escape(site.get("name") or "Venue")}</div>'
     button=f'<p style="margin:28px 0"><a href="{escape(button_url)}" style="display:inline-block;background:#1d5a47;color:white;text-decoration:none;padding:13px 20px;border-radius:8px;font-weight:700">{escape(button_label)}</a></p>' if button_url else ''
-    details=f'''<div style="background:#f4f7f5;border:1px solid #dfe8e2;border-radius:12px;padding:18px;margin:24px 0"><strong>{escape(str(booking.get("booking_date") or ""))}</strong><br>{escape(str(booking.get("booking_time") or "")[:5])} &nbsp;Â·&nbsp; {escape(str(booking.get("party_size") or ""))} guests<br><span style="color:#718079">Reference #{escape(str(booking.get("id") or ""))}</span></div>'''
+    details=f'''<div style="background:#f4f7f5;border:1px solid #dfe8e2;border-radius:12px;padding:18px;margin:24px 0"><strong>{escape(str(booking.get("booking_date") or ""))}</strong><br>{escape(str(booking.get("booking_time") or "")[:5])} &nbsp;·&nbsp; {escape(str(booking.get("party_size") or ""))} guests<br><span style="color:#718079">Reference #{escape(str(booking.get("id") or ""))}</span></div>'''
     return f'''<!doctype html><html><body style="margin:0;background:#f4f7f5;font-family:Arial,sans-serif;color:#17221e"><div style="max-width:620px;margin:0 auto;padding:36px 18px"><div style="background:white;border:1px solid #dfe8e2;border-radius:18px;padding:34px">{logo_html}<h1 style="font-size:26px;margin:0 0 16px">{escape(heading)}</h1><p style="font-size:16px;line-height:1.6;color:#46534e">{escape(message).replace(chr(10),'<br>')}</p>{details}{button}<p style="font-size:13px;color:#718079;margin-top:28px">{escape(settings.get("cancellation_policy") or "Please contact the restaurant if you need any assistance with your reservation.")}</p></div><p style="text-align:center;color:#89958f;font-size:11px;margin:18px">Reservation communications powered by Alport Hospitality Solutions</p></div></body></html>'''
 
 
@@ -3337,7 +3365,7 @@ def booking_deposit_checkout(booking_id):
     if amount<=0:return jsonify(error="No deposit is required for this booking"),400
     try:
         manage=_public_base_url()+"/manage-reservation/"+_booking_manage_token(b)
-        data={"mode":"payment","success_url":manage+"?payment=success","cancel_url":manage,"customer_email":b.get("guest_email") or None,"line_items[0][price_data][currency]":"gbp","line_items[0][price_data][product_data][name]":f"Reservation deposit â {site['name']}","line_items[0][price_data][unit_amount]":str(int(round(amount*100))),"line_items[0][quantity]":"1","metadata[booking_id]":str(b["id"])}
+        data={"mode":"payment","success_url":manage+"?payment=success","cancel_url":manage,"customer_email":b.get("guest_email") or None,"line_items[0][price_data][currency]":"gbp","line_items[0][price_data][product_data][name]":f"Reservation deposit — {site['name']}","line_items[0][price_data][unit_amount]":str(int(round(amount*100))),"line_items[0][quantity]":"1","metadata[booking_id]":str(b["id"])}
         data={k:v for k,v in data.items() if v is not None}
         checkout=stripe_connected_request("POST","/checkout/sessions",account,data)
         execute("UPDATE bookings SET deposit_required=?,deposit_status='Payment requested',deposit_checkout_session_id=?,updated_at=? WHERE id=?",(amount,checkout["id"],now(),booking_id))
@@ -3381,15 +3409,15 @@ def create_booking():
                          (u["organisation_id"],site["id"],guest_id,booking_date,booking_time,party,duration,d.get("status") or "Confirmed",d.get("source") or "Manager",table_id,name,email,phone,d.get("special_requests") or "",d.get("dietary_requirements") or "",d.get("internal_notes") or "",1 if d.get("marketing_consent") else 0,manage_token,deposit_required,deposit_status,now(),now()))
     booking=q("SELECT * FROM bookings WHERE id=?",(booking_id,),True)
     if email and int(settings.get("confirmation_enabled") or 0):
-        subject=_render_booking_text(settings.get("confirmation_subject") or "Your reservation is confirmed â {{venue_name}}",booking,site)
+        subject=_render_booking_text(settings.get("confirmation_subject") or "Your reservation is confirmed — {{venue_name}}",booking,site)
         message=_render_booking_text(settings.get("confirmation_message") or "Thank you for choosing {{venue_name}}. We look forward to welcoming you.",booking,site)
         manage_url=_public_base_url()+"/manage-reservation/"+manage_token
-        text=f"{message}\n\n{booking_date} at {booking_time} Â· {party} guests\n\nManage reservation: {manage_url}"
+        text=f"{message}\n\n{booking_date} at {booking_time} · {party} guests\n\nManage reservation: {manage_url}"
         result=send_alport_email(email,subject,text,_booking_email_html(site,settings,booking,"Your reservation is confirmed",message,"Manage reservation",manage_url))
         if result["ok"]:
             execute("UPDATE bookings SET confirmation_sent_at=? WHERE id=?",(now(),booking_id))
             execute("INSERT INTO guest_communications(organisation_id,site_id,guest_id,booking_id,communication_type,recipient,subject,status,provider_id,sent_at) VALUES(?,?,?,?,?,?,?,?,?,?)",(u["organisation_id"],site["id"],guest_id,booking_id,"Confirmation",email,subject,"Sent",result["id"],now()))
-    audit("Created","booking",booking_id,f"{name} Â· {party} Â· {booking_date} {booking_time}")
+    audit("Created","booking",booking_id,f"{name} · {party} · {booking_date} {booking_time}")
     return jsonify(ok=True,id=booking_id,table_id=table_id)
 
 
@@ -3531,7 +3559,7 @@ def send_booking_review(booking_id):
     public_url=(os.environ.get("PUBLIC_BASE_URL") or request.url_root.rstrip("/")).rstrip("/")
     link=f"{public_url}/booking-feedback/{booking_id}"
     settings=dict(booking_settings_for(u["organisation_id"],site["id"]))
-    subject=_render_booking_text(settings.get("review_subject") or "Thank you for dining with us â {{venue_name}}",b,site)
+    subject=_render_booking_text(settings.get("review_subject") or "Thank you for dining with us — {{venue_name}}",b,site)
     message=_render_booking_text(settings.get("review_message") or "Thank you for joining us. We would really appreciate hearing about your experience.",b,site)
     result=send_alport_email(b["guest_email"],subject,f"{message}\n\nShare your feedback: {link}",_booking_email_html(site,settings,b,"Thank you for dining with us",message,"Share your feedback",link))
     if not result["ok"]:return jsonify(error="Review email could not be sent"),502
@@ -3572,7 +3600,7 @@ def booking_feedback_submit(booking_id):
         except:return None
     execute("""INSERT INTO guest_feedback(organisation_id,site_id,booking_id,guest_id,overall_rating,food_rating,service_rating,atmosphere_rating,value_rating,comments,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",(b["organisation_id"],b["site_id"],booking_id,b["guest_id"],overall,rating("food_rating"),rating("service_rating"),rating("atmosphere_rating"),rating("value_rating"),(request.form.get("comments") or "")[:3000],now()))
     manager_email=os.environ.get("SUPPORT_EMAIL","").strip()
-    if manager_email:send_alport_email(manager_email,f"New guest feedback â {b['site_name']} â {overall}/5",f"Guest: {b['guest_name']}\nVisit: {b['booking_date']} {b['booking_time']}\nOverall: {overall}/5\n\n{(request.form.get('comments') or '').strip()}")
+    if manager_email:send_alport_email(manager_email,f"New guest feedback — {b['site_name']} — {overall}/5",f"Guest: {b['guest_name']}\nVisit: {b['booking_date']} {b['booking_time']}\nOverall: {overall}/5\n\n{(request.form.get('comments') or '').strip()}")
     return render_template("booking_feedback.html",booking=b,submitted=True)
 
 
@@ -3924,7 +3952,7 @@ def company_admin_update_subscription(organisation_id):
                plan=EXCLUDED.plan,monthly_price=EXCLUDED.monthly_price,status=EXCLUDED.status,
                trial_end=EXCLUDED.trial_end,next_billing_date=EXCLUDED.next_billing_date,notes=EXCLUDED.notes""",
             (organisation_id, plan, monthly_price, status, trial_end, next_billing_date, now(), notes))
-    company_event("Subscription updated", f"{plan} Â· Â£{monthly_price:.2f}/month Â· {status}", organisation_id)
+    company_event("Subscription updated", f"{plan} · £{monthly_price:.2f}/month · {status}", organisation_id)
     return jsonify(ok=True)
 
 
@@ -3946,7 +3974,7 @@ def company_admin_add_payment():
     notes = (d.get("notes") or "")[:500]
     pid = execute("""INSERT INTO subscription_payments(organisation_id,amount,payment_date,status,method,reference,notes,created_at)
                      VALUES(?,?,?,?,?,?,?,?)""", (organisation_id, amount, payment_date, status, method, reference, notes, now()))
-    company_event("Payment recorded", f"Â£{amount:.2f} Â· {status}", organisation_id)
+    company_event("Payment recorded", f"£{amount:.2f} · {status}", organisation_id)
     return jsonify(ok=True, id=pid)
 
 
@@ -4037,6 +4065,9 @@ from alport_setup import register_setup
 register_setup(app, globals())
 from alport_support import register_support
 register_support(app, globals())
+from alport_inventory import register_inventory
+register_inventory(app, globals())
+
 from alport_social import register_social
 register_social(app, globals())
 
