@@ -4037,6 +4037,8 @@ from alport_setup import register_setup
 register_setup(app, globals())
 from alport_support import register_support
 register_support(app, globals())
+from alport_social import register_social
+register_social(app, globals())
 
 
 if __name__ == "__main__":
