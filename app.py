@@ -4071,6 +4071,9 @@ register_inventory(app, globals())
 from alport_social import register_social
 register_social(app, globals())
 
+from alport_demand import register_demand
+register_demand(app, globals())
+
 
 if __name__ == "__main__":
     app.run(
