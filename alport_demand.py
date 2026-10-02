@@ -85,6 +85,8 @@ def estimate(daily,today,horizon,bookings,weather_pct,event_pct):
 
 def register_demand(app,env):
     from alport_purchasing import register_purchasing, outstanding
+    from alport_supplier_rules import SCHEMA as RULE_SCHEMA
+    with env['conn']() as c:c.execute(RULE_SCHEMA)
     register_purchasing(app,env)
     conn,q=env['conn'],env['q']
     with conn() as c:
@@ -169,7 +171,7 @@ def register_demand(app,env):
             for line in unpack(row['data']).get('lines',[]):
                 key=str(line['key']);identity=(row['connection_id'],key)
                 found[identity]={'connection_id':identity[0],'item_key':key,'name':line['name'],'mapping':maps.get(identity)}
-        return jsonify(items=list(found.values()),menus=list(menus.values()),suppliers=q('SELECT id,name FROM suppliers WHERE organisation_id=? AND active=1 ORDER BY name',(org,)),rules=q('SELECT * FROM alport_delivery_rules WHERE organisation_id=? AND site_id=?',(org,sid)),drafts=q('SELECT id,status,created_at FROM alport_order_drafts WHERE organisation_id=? AND site_id=? ORDER BY id DESC LIMIT 20',(org,sid)))
+        return jsonify(items=list(found.values()),menus=list(menus.values()),suppliers=q('SELECT id,name FROM suppliers WHERE organisation_id=? AND active=1 ORDER BY name',(org,)),policies=q('SELECT * FROM alport_supplier_rules WHERE organisation_id=? AND site_id=?',(org,sid)),rules=q('SELECT * FROM alport_delivery_rules WHERE organisation_id=? AND site_id=?',(org,sid)),drafts=q('SELECT id,status,created_at FROM alport_order_drafts WHERE organisation_id=? AND site_id=? ORDER BY id DESC LIMIT 20',(org,sid)))
     @bp.post('/api/demand/mapping')
     def mapping():
         d=request.get_json() or {};org,sid=scope()
@@ -213,10 +215,17 @@ def register_demand(app,env):
         try:supplier=int(d['supplier_id']);lead=int(d['lead_days']);days=sorted(set(int(x) for x in str(d['delivery_days']).split(',')))
         except (KeyError,ValueError,TypeError):raise ValueError('Enter lead days and delivery weekdays (0=Monday, 6=Sunday).') from None
         if not 0<=lead<=14 or not days or any(x<0 or x>6 for x in days):raise ValueError('Lead time must be 0–14 days; choose valid weekdays.')
+        from alport_supplier_rules import validate
+        policy=validate(d)
         if not q('SELECT id FROM suppliers WHERE id=? AND organisation_id=? AND active=1',(supplier,org),True):raise ValueError('Supplier unavailable.')
         with conn() as c:
+            lock(c,sid)
             c.execute('''INSERT INTO alport_delivery_rules(organisation_id,site_id,supplier_id,lead_days,delivery_days) VALUES(%s,%s,%s,%s,%s)
                 ON CONFLICT(organisation_id,site_id,supplier_id) DO UPDATE SET lead_days=excluded.lead_days,delivery_days=excluded.delivery_days''',(org,sid,supplier,lead,','.join(map(str,days))))
+            c.execute('''INSERT INTO alport_supplier_rules(organisation_id,site_id,supplier_id,cutoff,order_days,minimum_value,minimum_packs)
+                VALUES(%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(organisation_id,site_id,supplier_id)
+                DO UPDATE SET cutoff=excluded.cutoff,order_days=excluded.order_days,minimum_value=excluded.minimum_value,minimum_packs=excluded.minimum_packs''',
+                (org,sid,supplier,policy['cutoff'],policy['order_days'],policy['minimum_value'],policy['minimum_packs']))
         return jsonify(ok=True)
     def forecast(d):
         # Keep receipts/postings from splitting on-hand and incoming reads.
@@ -250,6 +259,9 @@ def register_demand(app,env):
         rules={x['supplier_id']:x for x in q('SELECT * FROM alport_delivery_rules WHERE organisation_id=? AND site_id=?',(org,sid))}
         with conn() as c:
             incoming=outstanding(c,org,sid,today.isoformat(),(today+timedelta(days=horizon-1)).isoformat())
+        from alport_supplier_rules import delivery_window,minimum_review
+        policies={x['supplier_id']:x for x in q('SELECT * FROM alport_supplier_rules WHERE organisation_id=? AND site_id=?',(org,sid))}
+        clock=datetime.now(ZoneInfo('Europe/London'))
         lines=[]
         for iid,stock in stocks.items():
             prediction=estimate(daily[iid],today,horizon,bookings,weather,events)
@@ -264,7 +276,8 @@ def register_demand(app,env):
                 packs=math.ceil(round(shortage/pack,9));cost=round(packs*float(product['pack_price']),2)
                 rule=rules.get(product['supplier_id'])
                 if rule:
-                    arrival=next_delivery(today,rule['lead_days'],[int(x) for x in rule['delivery_days'].split(',')]).isoformat()
+                    window=delivery_window(clock,rule['lead_days'],[int(x) for x in rule['delivery_days'].split(',')],policies.get(product['supplier_id']))
+                    arrival=window['arrival'];warning+=' '+window['message']
                     lead=(date.fromisoformat(arrival)-today).days
                     if lead and stock['on_hand']<prediction['units']/horizon*lead:warning+=' Stock may run out before delivery.'
                     if lead>=horizon:warning+=' Delivery falls outside this planning period.'
@@ -281,9 +294,13 @@ def register_demand(app,env):
                     if balance<0:
                         warning+=' Stock may run short before an outstanding delivery; review timing.'
                         break
-            lines.append({'incoming_units':round(incoming_units,6),'outstanding_deliveries':deliveries,'product_id':product['id'] if product else None,'stock_item_id':iid,'name':stock['name'],'unit':stock['unit'],'on_hand':stock['on_hand'],'par_level':stock['par_level'],**prediction,'shortage':round(shortage,6),'packs':packs,'cost':cost,'supplier_id':product['supplier_id'] if product else None,'supplier':product['supplier_name'] if product else '', 'product':product['product_name'] if product else '', 'arrival':arrival,'warning':warning.strip()})
+            lines.append({'incoming_units':round(incoming_units,6),'outstanding_deliveries':deliveries,'pack_price':float(product['pack_price']) if product else None,'product_id':product['id'] if product else None,'stock_item_id':iid,'name':stock['name'],'unit':stock['unit'],'on_hand':stock['on_hand'],'par_level':stock['par_level'],**prediction,'shortage':round(shortage,6),'packs':packs,'cost':cost,'supplier_id':product['supplier_id'] if product else None,'supplier':product['supplier_name'] if product else '', 'product':product['product_name'] if product else '', 'arrival':arrival,'warning':warning.strip()})
+        supplier_checks=[]
+        for supplier in sorted({x['supplier_id'] for x in lines if x.get('packs')}):
+            group=[x for x in lines if x['supplier_id']==supplier and x.get('packs')]
+            supplier_checks.append({'supplier_id':supplier,'supplier':group[0]['supplier'],**minimum_review(group,policies.get(supplier))})
         pending=q('SELECT COUNT(*) AS n FROM alport_order_drafts WHERE organisation_id=? AND site_id=? AND status IN (?,?)',(org,sid,'Draft','Approved'),True)['n']
-        result={'today':today.isoformat(),'days':horizon,'lines':lines,'bookings':bookings,'events':events_list,'weather_pct':weather,'event_pct':events,'note':note,'excluded_sales':excluded,'observed_days':len(observed),'existing_drafts':pending,
+        result={'supplier_checks':supplier_checks,'today':today.isoformat(),'days':horizon,'lines':lines,'bookings':bookings,'events':events_list,'weather_pct':weather,'event_pct':events,'note':note,'excluded_sales':excluded,'observed_days':len(observed),'existing_drafts':pending,
                 'method':'20% yesterday, 30% last 7 days, 50% last 28 days (observed trading days only); weekday blend where 2+ observations exist. Bookings can increase demand up to 2×. Weather/event adjustments are entered by staff, not learned automatically. Par level is a safety buffer. Unreceived quantities on placed orders due within this window reduce suggested purchases. Overdue orders and deliveries outside this window are excluded; review those exceptions before buying. Drafts and approvals are not incoming stock.'}
         result['fingerprint']=digest({k:v for k,v in result.items() if k!='existing_drafts'});return result
     @bp.post('/api/demand/forecast')
