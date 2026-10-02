@@ -84,6 +84,8 @@ def estimate(daily,today,horizon,bookings,weather_pct,event_pct):
 
 
 def register_demand(app,env):
+    from alport_purchasing import register_purchasing, outstanding
+    register_purchasing(app,env)
     conn,q=env['conn'],env['q']
     with conn() as c:
         for sql in SCHEMA.split(';'):
@@ -217,6 +219,12 @@ def register_demand(app,env):
                 ON CONFLICT(organisation_id,site_id,supplier_id) DO UPDATE SET lead_days=excluded.lead_days,delivery_days=excluded.delivery_days''',(org,sid,supplier,lead,','.join(map(str,days))))
         return jsonify(ok=True)
     def forecast(d):
+        # Keep receipts/postings from splitting on-hand and incoming reads.
+        _,sid=scope()
+        with conn() as guard:
+            lock(guard,sid)
+            return forecast_unlocked(d)
+    def forecast_unlocked(d):
         org,sid=scope();today=datetime.now(ZoneInfo('Europe/London')).date()
         try:
             horizon=int(d.get('days',7));weather=float(d.get('weather_pct',0));events=float(d.get('event_pct',0))
@@ -240,10 +248,14 @@ def register_demand(app,env):
         products={x['stock_item_id']:x for x in q('''SELECT p.*,s.name AS supplier_name FROM alport_supplier_products p JOIN suppliers s ON s.id=p.supplier_id
             WHERE p.organisation_id=? AND p.site_id=? AND p.preferred=TRUE AND s.active=1''',(org,sid))}
         rules={x['supplier_id']:x for x in q('SELECT * FROM alport_delivery_rules WHERE organisation_id=? AND site_id=?',(org,sid))}
+        with conn() as c:
+            incoming=outstanding(c,org,sid,today.isoformat(),(today+timedelta(days=horizon-1)).isoformat())
         lines=[]
         for iid,stock in stocks.items():
             prediction=estimate(daily[iid],today,horizon,bookings,weather,events)
-            shortage=max(0,prediction['units']+float(stock['par_level'])-float(stock['on_hand']))
+            deliveries=incoming.get(iid,[])
+            incoming_units=sum(x['quantity'] for x in deliveries if x['eligible'] and x['unit']==stock['unit'])
+            shortage=max(0,prediction['units']+float(stock['par_level'])-float(stock['on_hand'])-incoming_units)
             product=products.get(iid);packs=None;cost=None;arrival=None;warning=''
             if not prediction['observed_days']:warning='No usable history; par-level replenishment only.'
             elif prediction['observed_days']<7:warning='Limited sales history; review this estimate carefully.'
@@ -258,10 +270,21 @@ def register_demand(app,env):
                     if lead>=horizon:warning+=' Delivery falls outside this planning period.'
                 else:warning+=' Add supplier lead time and delivery days.'
             else:warning+=' Choose a preferred supplier product.'
-            lines.append({'stock_item_id':iid,'name':stock['name'],'unit':stock['unit'],'on_hand':stock['on_hand'],'par_level':stock['par_level'],**prediction,'shortage':round(shortage,6),'packs':packs,'cost':cost,'supplier_id':product['supplier_id'] if product else None,'supplier':product['supplier_name'] if product else '', 'product':product['product_name'] if product else '', 'arrival':arrival,'warning':warning.strip()})
+            if any(not x['eligible'] for x in deliveries):warning+=' Outstanding deliveries are overdue or outside this window; excluded from replenishment calculation.'
+            if any(x['unit']!=stock['unit'] for x in deliveries):warning+=' Outstanding order units changed; reconcile before buying.'
+            if incoming_units:
+                balance=float(stock['on_hand'])
+                for offset in range(horizon):
+                    day=(today+timedelta(days=offset)).isoformat()
+                    balance+=sum(x['quantity'] for x in deliveries if x['eligible'] and x['date']==day and x['unit']==stock['unit'])
+                    balance-=prediction['units']/horizon
+                    if balance<0:
+                        warning+=' Stock may run short before an outstanding delivery; review timing.'
+                        break
+            lines.append({'incoming_units':round(incoming_units,6),'outstanding_deliveries':deliveries,'product_id':product['id'] if product else None,'stock_item_id':iid,'name':stock['name'],'unit':stock['unit'],'on_hand':stock['on_hand'],'par_level':stock['par_level'],**prediction,'shortage':round(shortage,6),'packs':packs,'cost':cost,'supplier_id':product['supplier_id'] if product else None,'supplier':product['supplier_name'] if product else '', 'product':product['product_name'] if product else '', 'arrival':arrival,'warning':warning.strip()})
         pending=q('SELECT COUNT(*) AS n FROM alport_order_drafts WHERE organisation_id=? AND site_id=? AND status IN (?,?)',(org,sid,'Draft','Approved'),True)['n']
         result={'today':today.isoformat(),'days':horizon,'lines':lines,'bookings':bookings,'events':events_list,'weather_pct':weather,'event_pct':events,'note':note,'excluded_sales':excluded,'observed_days':len(observed),'existing_drafts':pending,
-                'method':'20% yesterday, 30% last 7 days, 50% last 28 days (observed trading days only); weekday blend where 2+ observations exist. Bookings can increase demand up to 2×. Weather/event adjustments are entered by staff, not learned automatically. Par level is a safety buffer. Incoming deliveries are not deducted; check existing orders.'}
+                'method':'20% yesterday, 30% last 7 days, 50% last 28 days (observed trading days only); weekday blend where 2+ observations exist. Bookings can increase demand up to 2×. Weather/event adjustments are entered by staff, not learned automatically. Par level is a safety buffer. Unreceived quantities on placed orders due within this window reduce suggested purchases. Overdue orders and deliveries outside this window are excluded; review those exceptions before buying. Drafts and approvals are not incoming stock.'}
         result['fingerprint']=digest({k:v for k,v in result.items() if k!='existing_drafts'});return result
     @bp.post('/api/demand/forecast')
     def forecast_preview():return jsonify(forecast(request.get_json() or {}))
