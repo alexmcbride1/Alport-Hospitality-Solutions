@@ -9,6 +9,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 from flask import Blueprint, request, session, jsonify, render_template, Response
 from alport_inventory import number, converted
+from alport_supplier_rules import order_review
 
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS alport_purchase_orders (
@@ -154,6 +155,7 @@ def register_purchasing(app,env):
         u,org,sid=context()
         with conn() as c:
             r=load(c,oid,org,sid);r['lines']=allrows(c,'SELECT * FROM alport_purchase_lines WHERE order_id=%s ORDER BY id',(oid,));r['events']=allrows(c,'SELECT * FROM alport_purchase_events WHERE order_id=%s ORDER BY id',(oid,))
+            r['rule_review']=order_review(c,org,sid,r['supplier_id'],r['lines'])
         for e in r['events']:
             if isinstance(e['payload'],str):e['payload']=json.loads(e['payload'])
         return jsonify(r)
@@ -174,11 +176,17 @@ def register_purchasing(app,env):
             status=r['status'];payload={'note':textfield(d,'note')}
             if action=='approve':
                 if status!='Draft':raise ValueError('Only draft orders can be approved.')
+                review=order_review(c,org,sid,r['supplier_id'],allrows(c,'SELECT * FROM alport_purchase_lines WHERE order_id=%s',(oid,)))
+                if review['below_minimum'] and not payload['note']:raise ValueError('Order is below the supplier minimum. Add a manager explanation to approve an exception, or replace the draft.')
+                payload['rule_review']=review
                 status='Approved'
             elif action=='ordered':
                 if status!='Approved':raise ValueError('Approve the order first.')
                 expected=datefield(d.get('expected_date'));reference=textfield(d,'reference',200)
                 if not reference:raise ValueError('Record how the supplier order was placed or its confirmation reference.')
+                review=order_review(c,org,sid,r['supplier_id'],allrows(c,'SELECT * FROM alport_purchase_lines WHERE order_id=%s',(oid,)))
+                if (review['below_minimum'] or (review['schedule'] and expected<review['schedule']['arrival'])) and not payload['note']:raise ValueError('Minimum or delivery deadline exception: record the supplier agreement in the explanation before marking placed.')
+                payload['rule_review']=review
                 c.execute('UPDATE alport_purchase_orders SET expected_date=%s,reference=%s WHERE id=%s',(expected,reference,oid));status='Ordered';payload.update(expected_date=expected,reference=reference)
             elif action=='reschedule':
                 if status not in ('Ordered','Part received'):raise ValueError('Only outstanding orders can be rescheduled.')
