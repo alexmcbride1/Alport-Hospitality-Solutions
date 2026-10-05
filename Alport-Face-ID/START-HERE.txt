@@ -1,0 +1,120 @@
+ALPORT — FACE ID & PASSKEYS UPDATE
+Prepared 5 October 2026
+
+This adds optional passkey sign-in for business accounts, staff and the separate
+Alport company-admin account. Password sign-in stays available. Face ID, Touch ID,
+a device PIN or another supported method is chosen by the person's device.
+
+1. UPLOAD THE FILES
+
+Unzip Alport-Face-ID.zip. Open Alport-Face-ID, then UPLOAD.
+Upload the CONTENTS of UPLOAD to the main page of your GitHub repository:
+  alexmcbride1/Alport-Hospitality-Solutions
+
+Select these six items together: app.py, alport_staff.py, alport_passkeys.py,
+requirements.txt, the templates folder, and the static folder.
+Use GitHub's Add file > Upload files, then commit the complete change together.
+This puts 14 files in the correct locations. Upload the actual files, not their
+text pasted into another file. Do not upload the outer UPLOAD folder itself.
+Keep all existing files that are not included in this update.
+
+Top level of GitHub (beside your existing app.py):
+  app.py                       replace
+  alport_staff.py              replace
+  alport_passkeys.py           NEW
+  requirements.txt             replace — important for a successful Render build
+
+Inside the EXISTING templates folder:
+  app.html                     replace
+  login.html                   replace
+  staff_auth.html              replace
+  staff_portal.html            replace
+  people.html                  replace
+  company_admin_login.html     replace
+  company_admin.html           replace
+  passkeys.html                NEW
+
+Inside the EXISTING static folder:
+  alport-passkeys.js           NEW
+  alport-passkeys.css          NEW
+
+There are no core, lang, PDF, OCR, logo or binary files to upload again.
+PLAIN-TEXT contains optional .txt copies if you prefer copying code. Those copies
+are not for uploading under their .txt names. CHECKS is for development checks;
+it is not needed on GitHub or Render.
+
+2. LET RENDER DEPLOY THE COMPLETE COMMIT
+
+The requirements file includes webauthn==3.0.1, a compatible cryptography version,
+and pywebpush for the existing staff notification feature. Do not leave the old
+requirements.txt in place: its cryptography pin conflicts with this update.
+Database tables are created automatically in your existing PostgreSQL database
+at app startup. There is no separate SQL file or database-reset step.
+
+No new Meta, banking or paid-service registration is needed. Keep your current
+DATABASE_URL, SECRET_KEY, COMPANY_ADMIN_EMAIL and COMPANY_ADMIN_PASSWORD values.
+SECRET_KEY must be your existing private random key, not CHANGE_THIS_IN_RENDER.
+Do not rotate it just to install this update: that signs everyone out and
+invalidates the new passkeys.
+
+By default passkeys work on BOTH:
+  https://alporthospitality.co.uk
+  https://www.alporthospitality.co.uk
+They do not work on the Render preview hostname with this configuration.
+
+3. ENABLE IT ON YOUR OWN PHONE
+
+BUSINESS ACCOUNT OR STAFF:
+- Open https://alporthospitality.co.uk in Safari on your iPhone.
+- Sign in using the usual password (staff use /staff/login).
+- Open Face ID & passkeys from the workspace, staff portal or People page.
+  You can also visit https://alporthospitality.co.uk/passkeys after signing in.
+- Name the passkey, e.g. Alex's iPhone, and enter your CURRENT account password.
+- Press Confirm password, then Save passkey on this device.
+- Complete the device's own prompt yourself.
+- Sign out, then choose Face ID / passkey on the sign-in page.
+
+COMPANY ADMIN:
+- Sign in at https://alporthospitality.co.uk/company-admin/login using the
+  separate company-admin credentials.
+- Open Face ID & passkeys in the top bar, or visit
+  https://alporthospitality.co.uk/company-admin/passkeys.
+- Follow the same setup steps using your COMPANY-ADMIN password.
+- That passkey signs in only through the company-admin sign-in page.
+
+Each person enables their own passkey. Adding a staff member does not silently
+register a passkey on their behalf. No camera permission is needed; the device
+handles its own identity check. Alport does not receive face scans, fingerprints,
+device PINs or passkey private keys.
+
+4. RECOVERY AND DEVICE CHANGES
+
+Your password stays usable. If you lose a device, sign in with your password on
+another device, open Face ID & passkeys, then remove the lost passkey using your
+current password. A synced passkey can exist on several devices: removing it in
+Alport disables all copies of that credential. You can separately delete its
+saved entry in your device's password manager.
+
+Removing a passkey stops future sign-ins, but does not terminate already-open
+sessions. Changing the account password invalidates its existing passkeys; add
+a new passkey afterwards. This also applies to changes to company-admin email
+or password in Render. Existing password recovery/invitation procedures remain.
+Do not save an account passkey in a shared venue device/password manager.
+
+5. WHAT WAS CHECKED / STILL TO CHECK
+
+31 new authentication checks use real cryptographic test signatures. Together
+with the existing regression suite, 159 checks passed locally. Python, template,
+JavaScript and PostgreSQL schema syntax checked; package dependencies resolved.
+The sign-in/settings pages were previewed locally using fictional account data.
+
+This has NOT been deployed by Codex. The local database tests use a SQLite
+adapter, not a live PostgreSQL instance; the schema was also parsed as PostgreSQL.
+Actual Face ID, Touch ID, passkey syncing and device prompts still need a check
+on your own supported device after upload. Existing venue acceptance testing
+remains on your checklist.
+
+If Render fails: send the FIRST error message from its build/deploy log.
+If the new button is missing: confirm all 14 files are present and refresh the
+browser. If passkeys are unavailable on a supported browser: use the branded
+HTTPS address above, check the certificate, and keep password sign-in available.

@@ -1,0 +1,1849 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Alport HQ</title>
+
+<style>
+:root{
+    --green:#1d5a47;
+    --dark:#0d2018;
+    --bg:#f3f6f4;
+    --card:#fff;
+    --line:#dde6e1;
+    --muted:#718078;
+    --red:#a3423a;
+    --amber:#9a6b1c;
+    --blue:#315c89
+}
+
+*{box-sizing:border-box}
+
+body{
+    margin:0;
+    background:var(--bg);
+    color:#16231d;
+    font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif
+}
+
+.top{
+    height:64px;
+    background:#fff;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 20px;
+    position:sticky;
+    top:0;
+    z-index:20
+}
+
+.logo{
+    font-size:20px;
+    font-weight:950
+}
+
+.logo span{color:var(--green)}
+
+.hq{
+    font-size:9px;
+    background:#e9f1ed;
+    color:var(--green);
+    font-weight:900;
+    letter-spacing:1px;
+    padding:5px 8px;
+    border-radius:20px;
+    margin-left:8px
+}
+
+.admin{
+    font-size:10px;
+    color:var(--muted);
+    text-align:right
+}
+
+.layout{
+    display:grid;
+    grid-template-columns:225px 1fr;
+    min-height:calc(100vh - 64px)
+}
+
+aside{
+    background:var(--dark);
+    padding:18px 12px;
+    color:#fff
+}
+
+.navgroup{
+    font-size:9px;
+    color:#708c80;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    padding:15px 10px 6px
+}
+
+.nav{
+    width:100%;
+    border:0;
+    background:transparent;
+    color:#c5d2cc;
+    text-align:left;
+    padding:11px;
+    border-radius:10px;
+    font-weight:800;
+    font-size:12px;
+    cursor:pointer;
+    margin-bottom:3px
+}
+
+.nav:hover,.nav.active{
+    background:var(--green);
+    color:#fff
+}
+
+main{
+    padding:24px;
+    max-width:1400px;
+    width:100%;
+    margin:auto
+}
+
+.view{display:none}
+.view.active{display:block}
+
+.eyebrow{
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    color:var(--green);
+    font-weight:900
+}
+
+.head h1{
+    font-size:30px;
+    margin:5px 0
+}
+
+.head p{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:3px
+}
+
+.grid4{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:10px
+}
+
+.grid3{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px
+}
+
+.section{margin-top:13px}
+
+.card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:15px;
+    padding:16px
+}
+
+.kpi .label{
+    font-size:9px;
+    color:var(--muted);
+    font-weight:850;
+    text-transform:uppercase;
+    letter-spacing:.7px
+}
+
+.kpi .value{
+    font-size:26px;
+    font-weight:950;
+    margin-top:6px
+}
+
+.kpi .hint{
+    font-size:10px;
+    color:var(--muted);
+    margin-top:3px
+}
+
+.sectionhead{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:11px
+}
+
+.sectionhead h2{
+    font-size:15px;
+    margin:0
+}
+
+.table{
+    overflow:auto;
+    border-radius:12px;
+    border:1px solid var(--line)
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    background:#fff;
+    min-width:800px
+}
+
+th{
+    font-size:9px;
+    text-transform:uppercase;
+    letter-spacing:.6px;
+    color:var(--muted);
+    background:#f8faf9;
+    text-align:left;
+    padding:10px
+}
+
+td{
+    font-size:11px;
+    padding:11px 10px;
+    border-top:1px solid #edf1ef
+}
+
+tr.clickable{cursor:pointer}
+tr.clickable:hover{background:#f7faf8}
+
+.pill{
+    display:inline-block;
+    padding:4px 8px;
+    border-radius:20px;
+    font-size:9px;
+    font-weight:900
+}
+
+.Active,.Paid{
+    background:#e6f3eb;
+    color:#26704d
+}
+
+.Trial{
+    background:#e9f0f8;
+    color:#315c89
+}
+
+.Pastdue,.Failed{
+    background:#fff1dc;
+    color:#8d6013
+}
+
+.Suspended,.Cancelled{
+    background:#f8e7e5;
+    color:#993d35
+}
+
+.btn{
+    border:1px solid var(--line);
+    background:#fff;
+    padding:9px 12px;
+    border-radius:9px;
+    font-size:11px;
+    font-weight:850;
+    cursor:pointer
+}
+
+.btn.primary{
+    background:var(--green);
+    color:#fff;
+    border-color:var(--green)
+}
+
+.btn.danger{color:var(--red)}
+
+.actions{
+    display:flex;
+    gap:7px;
+    flex-wrap:wrap
+}
+
+.search{
+    border:1px solid var(--line);
+    padding:9px 11px;
+    border-radius:9px;
+    min-width:240px
+}
+
+.two{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px
+}
+
+.small{
+    font-size:10px;
+    color:var(--muted)
+}
+
+.form label{
+    display:block;
+    font-size:10px;
+    font-weight:850;
+    margin:10px 0 5px
+}
+
+.form input,
+.form select,
+.form textarea{
+    width:100%;
+    border:1px solid var(--line);
+    border-radius:9px;
+    padding:9px;
+    font:inherit;
+    font-size:11px
+}
+
+.formgrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:9px
+}
+
+.modal{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:#07150ecc;
+    z-index:50;
+    align-items:center;
+    justify-content:center;
+    padding:15px
+}
+
+.modal.open{display:flex}
+
+.sheet{
+    width:min(850px,100%);
+    max-height:92vh;
+    overflow:auto;
+    background:#fff;
+    border-radius:18px;
+    padding:18px
+}
+
+.close{
+    border:0;
+    background:#edf2ef;
+    border-radius:50%;
+    width:32px;
+    height:32px;
+    cursor:pointer
+}
+
+.metricline{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    padding:9px 0;
+    border-bottom:1px solid #eef2f0;
+    font-size:11px
+}
+
+.event{
+    padding:10px 0;
+    border-bottom:1px solid #edf1ef
+}
+
+.event b{font-size:11px}
+
+.event div{
+    font-size:10px;
+    color:var(--muted);
+    margin-top:3px
+}
+
+@media(max-width:850px){
+    .layout{display:block}
+    .layout aside{display:none}
+    main{padding:17px 12px}
+    .grid4,.grid3,.two{grid-template-columns:1fr 1fr}
+    .top{padding:0 12px}
+}
+
+@media(max-width:520px){
+    .grid4,.grid3,.two,.formgrid{grid-template-columns:1fr}
+    .admin{display:none}
+}
+</style>
+<link rel="icon" type="image/svg+xml" href="/static/alport-logo.svg"><link rel="stylesheet" href="/static/alport-ui.css?v=20261001"></head>
+
+<body class="alport-page page-company-admin">
+
+<header class="top">
+    <div>
+        <a class="brand-link" href="/" aria-label="Alport home"><img class="brand-image" src="/static/alport-logo.svg" alt="Alport Hospitality Solutions"></a>
+        <span class="hq">COMPANY HQ</span>
+    </div>
+
+    <div class="admin">
+        <b>{{admin_email}}</b><br>
+        Super admin
+    </div>
+<a href="/company-admin/passkeys" style="color:inherit">Face ID &amp; passkeys</a></header>
+
+<div class="layout">
+
+<aside>
+
+    <button class="nav active" data-view="dashboard">
+        ⌂ Dashboard
+    </button>
+
+    <div class="navgroup">Commercial</div>
+
+    <button class="nav" data-view="customers">
+        ▣ Customers
+    </button>
+
+    <button class="nav" data-view="subscriptions">
+        £ Subscriptions
+    </button>
+
+    <button class="nav" data-view="payments">
+        ↗ Payments
+    </button>
+
+    <button class="nav" data-view="revenue">
+        ◫ Revenue
+    </button>
+
+    <div class="navgroup">Platform</div>
+
+    <button class="nav" data-view="users">
+        ♙ Users
+    </button>
+
+    <button class="nav" data-view="system">
+        ◉ System activity
+    </button>
+
+    <div class="navgroup">Account</div>
+
+    <form method="post" action="/company-admin/logout">
+        <button class="nav">
+            ↪ Sign out
+        </button>
+    </form>
+
+</aside>
+
+<main>
+
+<!-- DASHBOARD -->
+
+<section id="dashboard" class="view active">
+
+    <div class="head">
+        <div class="eyebrow">Alport company management</div>
+        <h1>Company dashboard</h1>
+        <p>Your live view across every Alport customer, venue and subscription.</p>
+    </div>
+
+    <div class="grid4">
+
+        <div class="card kpi">
+            <div class="label">Monthly recurring revenue</div>
+            <div class="value" id="kMrr">—</div>
+            <div class="hint" id="kArr"></div>
+        </div>
+
+        <div class="card kpi">
+            <div class="label">Customers</div>
+            <div class="value" id="kCustomers">—</div>
+            <div class="hint" id="kActive"></div>
+        </div>
+
+        <div class="card kpi">
+            <div class="label">Active venues</div>
+            <div class="value" id="kSites">—</div>
+        </div>
+
+        <div class="card kpi">
+            <div class="label">Platform users</div>
+            <div class="value" id="kUsers">—</div>
+        </div>
+
+    </div>
+
+    <div class="section grid3">
+
+        <div class="card kpi">
+            <div class="label">Trials</div>
+            <div class="value" id="kTrials">—</div>
+        </div>
+
+        <div class="card kpi">
+            <div class="label">Payments overdue</div>
+            <div class="value" id="kOverdue">—</div>
+        </div>
+
+        <div class="card kpi">
+            <div class="label">Lifetime collected</div>
+            <div class="value" id="kCollected">—</div>
+        </div>
+
+    </div>
+
+    <div class="section two">
+
+        <div class="card">
+            <div class="sectionhead">
+                <h2>Customers requiring attention</h2>
+                <button class="btn" onclick="navTo('customers')">
+                    View all
+                </button>
+            </div>
+
+            <div id="attention"></div>
+        </div>
+
+        <div class="card">
+            <div class="sectionhead">
+                <h2>Recent company activity</h2>
+            </div>
+
+            <div id="recentEvents"></div>
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- CUSTOMERS -->
+
+<section id="customers" class="view">
+
+    <div class="head">
+        <div class="eyebrow">Accounts</div>
+        <h1>Customers</h1>
+        <p>Every hospitality business using Alport.</p>
+    </div>
+
+    <div class="sectionhead">
+
+        <input
+            class="search"
+            id="customerSearch"
+            placeholder="Search customer, plan or status…"
+            oninput="renderCustomers()"
+        >
+
+        <button class="btn" onclick="loadCustomers()">
+            Refresh
+        </button>
+
+    </div>
+
+    <div class="table">
+
+        <table>
+
+            <thead>
+                <tr>
+                    <th>Customer</th>
+                    <th>Plan</th>
+                    <th>Status</th>
+                    <th>Monthly</th>
+                    <th>Sites</th>
+                    <th>Users</th>
+                    <th>Total paid</th>
+                    <th>Joined</th>
+                </tr>
+            </thead>
+
+            <tbody id="customerRows"></tbody>
+
+        </table>
+
+    </div>
+
+</section>
+
+
+<!-- SUBSCRIPTIONS -->
+
+<section id="subscriptions" class="view">
+
+    <div class="head">
+        <div class="eyebrow">Billing</div>
+        <h1>Subscriptions</h1>
+        <p>Plans, recurring value, trials and account status.</p>
+    </div>
+
+    <div class="table">
+
+        <table>
+
+            <thead>
+                <tr>
+                    <th>Customer</th>
+                    <th>Plan</th>
+                    <th>Status</th>
+                    <th>MRR</th>
+                    <th>Trial end</th>
+                    <th>Next billing</th>
+                </tr>
+            </thead>
+
+            <tbody id="subscriptionRows"></tbody>
+
+        </table>
+
+    </div>
+
+</section>
+
+
+<!-- PAYMENTS -->
+
+<section id="payments" class="view">
+
+    <div class="head">
+        <div class="eyebrow">Money in</div>
+        <h1>Alport payments</h1>
+        <p>
+            Subscription payments received by Alport —
+            separate from customer venue payments.
+        </p>
+    </div>
+
+    <div class="actions" style="margin-bottom:12px">
+
+        <button class="btn primary" onclick="openPayment()">
+            + Record payment
+        </button>
+
+        <button class="btn" onclick="loadPayments()">
+            Refresh
+        </button>
+
+    </div>
+
+    <div class="table">
+
+        <table>
+
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Method</th>
+                    <th>Reference</th>
+                </tr>
+            </thead>
+
+            <tbody id="paymentRows"></tbody>
+
+        </table>
+
+    </div>
+
+</section>
+
+
+<!-- REVENUE -->
+
+<section id="revenue" class="view">
+
+    <div class="head">
+        <div class="eyebrow">Commercial performance</div>
+        <h1>Revenue</h1>
+        <p>Recurring subscription value and customer economics.</p>
+    </div>
+
+    <div class="grid4">
+
+        <div class="card kpi">
+            <div class="label">MRR</div>
+            <div class="value" id="rMrr">—</div>
+        </div>
+
+        <div class="card kpi">
+            <div class="label">ARR run rate</div>
+            <div class="value" id="rArr">—</div>
+        </div>
+
+        <div class="card kpi">
+            <div class="label">Lifetime collected</div>
+            <div class="value" id="rCollected">—</div>
+        </div>
+
+        <div class="card kpi">
+            <div class="label">Average MRR / active customer</div>
+            <div class="value" id="rArpu">—</div>
+        </div>
+
+    </div>
+
+    <div class="section card">
+
+        <div class="sectionhead">
+            <h2>Recurring revenue by customer</h2>
+        </div>
+
+        <div id="revenueCustomers"></div>
+
+    </div>
+
+</section>
+
+
+<!-- USERS -->
+
+<section id="users" class="view">
+
+    <div class="head">
+        <div class="eyebrow">Platform</div>
+        <h1>Users</h1>
+        <p>All active and inactive user accounts across Alport.</p>
+    </div>
+
+    <input
+        class="search"
+        id="userSearch"
+        placeholder="Search name, email, company or role…"
+        oninput="renderUsers()"
+        style="margin-bottom:12px"
+    >
+
+    <div class="table">
+
+        <table>
+
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Company</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+
+            <tbody id="userRows"></tbody>
+
+        </table>
+
+    </div>
+
+</section>
+
+
+<!-- SYSTEM -->
+
+<section id="system" class="view">
+
+    <div class="head">
+        <div class="eyebrow">Governance</div>
+        <h1>System activity</h1>
+        <p>Important company-level actions and account events.</p>
+    </div>
+
+    <div class="card" id="systemEvents"></div>
+
+</section>
+
+</main>
+</div>
+
+
+<!-- CUSTOMER MODAL -->
+
+<div class="modal" id="customerModal">
+
+<div class="sheet">
+
+    <div class="sectionhead">
+
+        <div>
+            <b id="cmName">Customer</b>
+            <div class="small" id="cmMeta"></div>
+        </div>
+
+        <button
+            class="close"
+            onclick="closeModal('customerModal')"
+        >
+            ×
+        </button>
+
+    </div>
+
+    <div class="two">
+
+        <div class="card">
+
+            <div class="sectionhead">
+                <h2>Subscription</h2>
+            </div>
+
+            <form
+                class="form"
+                onsubmit="saveSubscription(event)"
+            >
+
+                <input type="hidden" id="cmId">
+
+                <div class="formgrid">
+
+                    <div>
+                        <label>Plan</label>
+                        <input id="cmPlan">
+                    </div>
+
+                    <div>
+                        <label>Monthly price (£)</label>
+                        <input
+                            id="cmPrice"
+                            type="number"
+                            step=".01"
+                            min="0"
+                        >
+                    </div>
+
+                </div>
+
+                <div class="formgrid">
+
+                    <div>
+                        <label>Status</label>
+
+                        <select id="cmStatus">
+                            <option>Trial</option>
+                            <option>Active</option>
+                            <option>Past due</option>
+                            <option>Suspended</option>
+                            <option>Cancelled</option>
+                        </select>
+
+                    </div>
+
+                    <div>
+                        <label>Trial end</label>
+                        <input
+                            id="cmTrial"
+                            type="date"
+                        >
+                    </div>
+
+                </div>
+
+                <label>Next billing date</label>
+                <input
+                    id="cmBilling"
+                    type="date"
+                >
+
+                <label>Internal notes</label>
+                <textarea
+                    id="cmNotes"
+                    rows="3"
+                ></textarea>
+
+                <button
+                    class="btn primary"
+                    style="margin-top:10px"
+                >
+                    Save subscription
+                </button>
+
+            </form>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="sectionhead">
+                <h2>Account summary</h2>
+            </div>
+
+            <div id="cmSummary"></div>
+
+        </div>
+
+    </div>
+
+
+    <div class="section two">
+
+        <div class="card">
+
+            <h2 style="font-size:14px">
+                Sites
+            </h2>
+
+            <div id="cmSites"></div>
+
+        </div>
+
+
+        <div class="card">
+
+            <h2 style="font-size:14px">
+                Users
+            </h2>
+
+            <div id="cmUsers"></div>
+
+        </div>
+
+    </div>
+
+
+    <div class="section card">
+
+        <h2 style="font-size:14px">
+            Alport payment history
+        </h2>
+
+        <div id="cmPayments"></div>
+
+    </div>
+
+</div>
+</div>
+
+
+<!-- PAYMENT MODAL -->
+
+<div class="modal" id="paymentModal">
+
+<div class="sheet" style="max-width:560px">
+
+    <div class="sectionhead">
+
+        <b>Record Alport payment</b>
+
+        <button
+            class="close"
+            onclick="closeModal('paymentModal')"
+        >
+            ×
+        </button>
+
+    </div>
+
+    <form
+        class="form"
+        onsubmit="savePayment(event)"
+    >
+
+        <label>Customer</label>
+        <select id="payOrg" required></select>
+
+        <div class="formgrid">
+
+            <div>
+                <label>Amount (£)</label>
+
+                <input
+                    id="payAmount"
+                    type="number"
+                    step=".01"
+                    min="0"
+                    required
+                >
+            </div>
+
+            <div>
+                <label>Date</label>
+
+                <input
+                    id="payDate"
+                    type="date"
+                    required
+                >
+            </div>
+
+        </div>
+
+        <div class="formgrid">
+
+            <div>
+                <label>Status</label>
+
+                <select id="payStatus">
+                    <option>Paid</option>
+                    <option>Pending</option>
+                    <option>Failed</option>
+                    <option>Refunded</option>
+                </select>
+
+            </div>
+
+            <div>
+                <label>Method</label>
+
+                <input
+                    id="payMethod"
+                    placeholder="Card / Direct Debit"
+                >
+
+            </div>
+
+        </div>
+
+        <label>Reference</label>
+        <input id="payRef">
+
+        <label>Notes</label>
+        <textarea
+            id="payNotes"
+            rows="3"
+        ></textarea>
+
+        <button
+            class="btn primary"
+            style="margin-top:12px"
+        >
+            Record payment
+        </button>
+
+    </form>
+
+</div>
+</div>
+
+
+<script>
+
+let customers = [];
+let users = [];
+let overview = {};
+
+const formatGBP = n =>
+    '£' + Number(n || 0).toLocaleString(
+        'en-GB',
+        {
+            minimumFractionDigits:2,
+            maximumFractionDigits:2
+        }
+    );
+
+const esc = s =>
+    String(s ?? '').replace(
+        /[&<>"']/g,
+        m => ({
+            '&':'&amp;',
+            '<':'&lt;',
+            '>':'&gt;',
+            '"':'&quot;',
+            "'":'&#39;'
+        }[m])
+    );
+
+const pill = s =>
+    `<span class="pill ${String(s).replace(/\s/g,'')}">${esc(s)}</span>`;
+
+
+async function api(url,opt){
+
+    let r = await fetch(url,opt);
+
+    let d = await r.json();
+
+    if(!r.ok)
+        throw Error(d.error || 'Request failed');
+
+    return d;
+}
+
+
+function navTo(id){
+
+    document
+        .querySelectorAll('.view')
+        .forEach(
+            x => x.classList.toggle(
+                'active',
+                x.id === id
+            )
+        );
+
+    document
+        .querySelectorAll('.nav[data-view]')
+        .forEach(
+            x => x.classList.toggle(
+                'active',
+                x.dataset.view === id
+            )
+        );
+
+    if(id === 'payments')
+        loadPayments();
+
+    if(id === 'users')
+        loadUsers();
+
+    if(id === 'system')
+        loadEvents();
+}
+
+
+document
+    .querySelectorAll('.nav[data-view]')
+    .forEach(
+        b => b.onclick = () =>
+            navTo(b.dataset.view)
+    );
+
+
+function openModal(id){
+    document
+        .getElementById(id)
+        .classList.add('open');
+}
+
+
+function closeModal(id){
+    document
+        .getElementById(id)
+        .classList.remove('open');
+}
+
+
+async function loadOverview(){
+
+    overview =
+        await api('/api/company-admin/overview');
+
+    kMrr.textContent =
+        formatGBP(overview.mrr);
+
+    kArr.textContent =
+        'ARR ' + formatGBP(overview.arr);
+
+    kCustomers.textContent =
+        overview.organisations;
+
+    kActive.textContent =
+        overview.active +
+        ' active subscriptions';
+
+    kSites.textContent =
+        overview.sites;
+
+    kUsers.textContent =
+        overview.users;
+
+    kTrials.textContent =
+        overview.trials;
+
+    kOverdue.textContent =
+        overview.overdue;
+
+    kCollected.textContent =
+        formatGBP(overview.collected);
+
+    rMrr.textContent =
+        formatGBP(overview.mrr);
+
+    rArr.textContent =
+        formatGBP(overview.arr);
+
+    rCollected.textContent =
+        formatGBP(overview.collected);
+
+    rArpu.textContent =
+        formatGBP(
+            overview.active
+            ? overview.mrr / overview.active
+            : 0
+        );
+
+    recentEvents.innerHTML =
+        (overview.recent_events || [])
+            .map(eventHtml)
+            .join('')
+        ||
+        '<div class="small">No company events yet.</div>';
+}
+
+
+function eventHtml(e){
+
+    return `
+        <div class="event">
+            <b>${esc(e.event_type)}</b>
+
+            <div>
+                ${esc(e.organisation_name || 'Alport')}
+                ·
+                ${esc(e.detail || '')}
+                ·
+                ${esc(
+                    (e.created_at || '')
+                    .replace('T',' ')
+                    .slice(0,16)
+                )}
+            </div>
+        </div>
+    `;
+}
+
+
+async function loadCustomers(){
+
+    let d =
+        await api('/api/company-admin/customers');
+
+    customers =
+        d.customers || [];
+
+    renderCustomers();
+    renderSubscriptions();
+    renderRevenue();
+
+    attention.innerHTML =
+        customers
+            .filter(
+                x =>
+                    [
+                        'Past due',
+                        'Suspended'
+                    ].includes(
+                        x.subscription_status
+                    )
+            )
+            .slice(0,8)
+            .map(
+                x => `
+                    <div class="metricline">
+                        <span>
+                            ${esc(x.name)}
+                        </span>
+
+                        <span>
+                            ${pill(
+                                x.subscription_status
+                            )}
+                        </span>
+                    </div>
+                `
+            )
+            .join('')
+        ||
+        '<div class="small">No accounts currently need attention.</div>';
+
+    payOrg.innerHTML =
+        customers
+            .map(
+                x => `
+                    <option value="${x.id}">
+                        ${esc(x.name)}
+                    </option>
+                `
+            )
+            .join('');
+}
+
+
+function renderCustomers(){
+
+    let q =
+        (customerSearch.value || '')
+        .toLowerCase();
+
+    let rows =
+        customers.filter(
+            x =>
+                [
+                    x.name,
+                    x.plan,
+                    x.subscription_status,
+                    x.business_type
+                ]
+                .join(' ')
+                .toLowerCase()
+                .includes(q)
+        );
+
+    customerRows.innerHTML =
+        rows
+            .map(
+                x => `
+                    <tr
+                        class="clickable"
+                        onclick="openCustomer(${x.id})"
+                    >
+
+                        <td>
+                            <b>${esc(x.name)}</b>
+                            <br>
+                            <span class="small">
+                                ${esc(x.business_type)}
+                            </span>
+                        </td>
+
+                        <td>
+                            ${esc(x.plan)}
+                        </td>
+
+                        <td>
+                            ${pill(
+                                x.subscription_status
+                            )}
+                        </td>
+
+                        <td>
+                            ${formatGBP(x.monthly_price)}
+                        </td>
+
+                        <td>
+                            ${x.site_count}
+                        </td>
+
+                        <td>
+                            ${x.user_count}
+                        </td>
+
+                        <td>
+                            ${formatGBP(x.total_paid)}
+                        </td>
+
+                        <td>
+                            ${esc(
+                                (x.created_at || '')
+                                .slice(0,10)
+                            )}
+                        </td>
+
+                    </tr>
+                `
+            )
+            .join('');
+}
+
+
+function renderSubscriptions(){
+
+    subscriptionRows.innerHTML =
+        customers
+            .map(
+                x => `
+                    <tr
+                        class="clickable"
+                        onclick="openCustomer(${x.id})"
+                    >
+
+                        <td>
+                            <b>${esc(x.name)}</b>
+                        </td>
+
+                        <td>
+                            ${esc(x.plan)}
+                        </td>
+
+                        <td>
+                            ${pill(
+                                x.subscription_status
+                            )}
+                        </td>
+
+                        <td>
+                            ${formatGBP(x.monthly_price)}
+                        </td>
+
+                        <td>
+                            ${esc(
+                                x.trial_end || '—'
+                            )}
+                        </td>
+
+                        <td>
+                            ${esc(
+                                x.next_billing_date
+                                || '—'
+                            )}
+                        </td>
+
+                    </tr>
+                `
+            )
+            .join('');
+}
+
+
+function renderRevenue(){
+
+    let sorted =
+        [...customers]
+        .filter(
+            x =>
+                x.subscription_status
+                === 'Active'
+        )
+        .sort(
+            (a,b) =>
+                b.monthly_price
+                -
+                a.monthly_price
+        );
+
+    revenueCustomers.innerHTML =
+        sorted
+            .map(
+                x => `
+                    <div class="metricline">
+
+                        <span>
+                            <b>${esc(x.name)}</b>
+                            <br>
+                            <span class="small">
+                                ${esc(x.plan)}
+                            </span>
+                        </span>
+
+                        <span>
+                            <b>
+                                ${formatGBP(x.monthly_price)}
+                            </b>/mo
+                        </span>
+
+                    </div>
+                `
+            )
+            .join('')
+        ||
+        '<div class="small">No active paid subscriptions yet.</div>';
+}
+
+
+async function openCustomer(id){
+
+    let d =
+        await api(
+            '/api/company-admin/customers/'
+            + id
+        );
+
+    let c = d.customer;
+
+    cmId.value = c.id;
+
+    cmName.textContent =
+        c.name;
+
+    cmMeta.textContent =
+        c.business_type
+        +
+        ' · Joined '
+        +
+        (c.created_at || '')
+        .slice(0,10);
+
+    cmPlan.value =
+        c.plan || 'Starter';
+
+    cmPrice.value =
+        c.monthly_price || 0;
+
+    cmStatus.value =
+        c.subscription_status
+        || 'Trial';
+
+    cmTrial.value =
+        c.trial_end || '';
+
+    cmBilling.value =
+        c.next_billing_date || '';
+
+    cmNotes.value =
+        c.subscription_notes || '';
+
+    cmSummary.innerHTML = `
+        <div class="metricline">
+            <span>Sites</span>
+            <b>${d.sites.length}</b>
+        </div>
+
+        <div class="metricline">
+            <span>Users</span>
+            <b>${d.users.length}</b>
+        </div>
+
+        <div class="metricline">
+            <span>Payments recorded</span>
+            <b>${d.payments.length}</b>
+        </div>
+
+        <div class="metricline">
+            <span>Total paid</span>
+
+            <b>
+                ${formatGBP(
+                    d.payments
+                    .filter(
+                        p =>
+                            p.status === 'Paid'
+                    )
+                    .reduce(
+                        (a,p) =>
+                            a
+                            +
+                            Number(p.amount),
+                        0
+                    )
+                )}
+            </b>
+        </div>
+    `;
+
+    cmSites.innerHTML =
+        d.sites
+        .map(
+            s => `
+                <div class="metricline">
+
+                    <span>
+                        ${esc(s.name)}
+                    </span>
+
+                    <span>
+                        ${
+                            s.active
+                            ? 'Active'
+                            : 'Inactive'
+                        }
+                    </span>
+
+                </div>
+            `
+        )
+        .join('');
+
+    cmUsers.innerHTML =
+        d.users
+        .map(
+            u => `
+                <div class="metricline">
+
+                    <span>
+                        ${esc(u.name)}
+                        <br>
+
+                        <span class="small">
+                            ${esc(u.email)}
+                        </span>
+                    </span>
+
+                    <span>
+                        ${esc(u.role)}
+                    </span>
+
+                </div>
+            `
+        )
+        .join('');
+
+    cmPayments.innerHTML =
+        d.payments
+        .map(
+            p => `
+                <div class="metricline">
+
+                    <span>
+                        ${esc(p.payment_date)}
+                        ·
+                        ${esc(
+                            p.reference
+                            ||
+                            p.method
+                            ||
+                            'Payment'
+                        )}
+                    </span>
+
+                    <span>
+                        ${formatGBP(p.amount)}
+                        ${pill(p.status)}
+                    </span>
+
+                </div>
+            `
+        )
+        .join('')
+        ||
+        '<div class="small">No payments recorded.</div>';
+
+    openModal('customerModal');
+}
+
+
+async function saveSubscription(e){
+
+    e.preventDefault();
+
+    let id =
+        cmId.value;
+
+    await api(
+        '/api/company-admin/subscriptions/'
+        + id,
+        {
+            method:'POST',
+
+            headers:{
+                'Content-Type':
+                    'application/json'
+            },
+
+            body:JSON.stringify({
+                plan:cmPlan.value,
+                monthly_price:
+                    cmPrice.value,
+                status:
+                    cmStatus.value,
+                trial_end:
+                    cmTrial.value,
+                next_billing_date:
+                    cmBilling.value,
+                notes:
+                    cmNotes.value
+            })
+        }
+    );
+
+    closeModal('customerModal');
+
+    await Promise.all([
+        loadCustomers(),
+        loadOverview()
+    ]);
+}
+
+
+function openPayment(){
+
+    payDate.value =
+        new Date()
+        .toISOString()
+        .slice(0,10);
+
+    openModal('paymentModal');
+}
+
+
+async function savePayment(e){
+
+    e.preventDefault();
+
+    await api(
+        '/api/company-admin/payments',
+        {
+            method:'POST',
+
+            headers:{
+                'Content-Type':
+                    'application/json'
+            },
+
+            body:JSON.stringify({
+                organisation_id:
+                    payOrg.value,
+                amount:
+                    payAmount.value,
+                payment_date:
+                    payDate.value,
+                status:
+                    payStatus.value,
+                method:
+                    payMethod.value,
+                reference:
+                    payRef.value,
+                notes:
+                    payNotes.value
+            })
+        }
+    );
+
+    closeModal('paymentModal');
+
+    e.target.reset();
+
+    await Promise.all([
+        loadPayments(),
+        loadCustomers(),
+        loadOverview()
+    ]);
+}
+
+
+async function loadPayments(){
+
+    let d =
+        await api(
+            '/api/company-admin/payments'
+        );
+
+    paymentRows.innerHTML =
+        (d.payments || [])
+        .map(
+            p => `
+                <tr>
+
+                    <td>
+                        ${esc(p.payment_date)}
+                    </td>
+
+                    <td>
+                        <b>
+                            ${esc(
+                                p.organisation_name
+                            )}
+                        </b>
+                    </td>
+
+                    <td>
+                        ${formatGBP(p.amount)}
+                    </td>
+
+                    <td>
+                        ${pill(p.status)}
+                    </td>
+
+                    <td>
+                        ${esc(
+                            p.method || '—'
+                        )}
+                    </td>
+
+                    <td>
+                        ${esc(
+                            p.reference || '—'
+                        )}
+                    </td>
+
+                </tr>
+            `
+        )
+        .join('');
+}
+
+
+async function loadUsers(){
+
+    let d =
+        await api(
+            '/api/company-admin/users'
+        );
+
+    users =
+        d.users || [];
+
+    renderUsers();
+}
+
+
+function renderUsers(){
+
+    let q =
+        (userSearch.value || '')
+        .toLowerCase();
+
+    userRows.innerHTML =
+        users
+        .filter(
+            u =>
+                [
+                    u.name,
+                    u.email,
+                    u.organisation_name,
+                    u.role
+                ]
+                .join(' ')
+                .toLowerCase()
+                .includes(q)
+        )
+        .map(
+            u => `
+                <tr>
+
+                    <td>
+                        <b>${esc(u.name)}</b>
+                    </td>
+
+                    <td>
+                        ${esc(u.email)}
+                    </td>
+
+                    <td>
+                        ${esc(
+                            u.organisation_name
+                        )}
+                    </td>
+
+                    <td>
+                        ${esc(u.role)}
+                    </td>
+
+                    <td>
+                        ${
+                            u.active
+                            ? pill('Active')
+                            : pill('Suspended')
+                        }
+                    </td>
+
+                    <td>
+                        ${esc(
+                            (u.created_at || '')
+                            .slice(0,10)
+                        )}
+                    </td>
+
+                </tr>
+            `
+        )
+        .join('');
+}
+
+
+async function loadEvents(){
+
+    let d =
+        await api(
+            '/api/company-admin/events'
+        );
+
+    systemEvents.innerHTML =
+        (d.events || [])
+        .map(eventHtml)
+        .join('')
+        ||
+        '<div class="small">No company activity recorded yet.</div>';
+}
+
+
+Promise.all([
+    loadOverview(),
+    loadCustomers(),
+    loadPayments(),
+    loadUsers()
+])
+.catch(
+    e => alert(e.message)
+);
+
+</script>
+
+</body>
+</html>

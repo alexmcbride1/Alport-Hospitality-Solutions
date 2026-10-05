@@ -1,0 +1,16 @@
+{
+  "app.py": "545e9efa20309e2f034bc4ed53f5a65bf4cf2eb993ac287c30a9ca78d9df37f0",
+  "alport_staff.py": "3d941a54a88ad02fec8d5ccc431a8bf6146d6b9265d572f701920ddb205bcf6d",
+  "alport_passkeys.py": "f56641e0c2c8be3daf88bb95f60eae0db8660f7f9b5afad246d3784503fa4d51",
+  "requirements.txt": "fe0af126f03a49da1224e5cdc84698843142d06c5091ca645be4ae8175ec64ee",
+  "templates/app.html": "045901afa827a44395ad38ae7f8901e17af79fc37e01e770946485841c10e3ae",
+  "templates/company_admin.html": "2fa2419abdcdcaf61b6f9ed0d8f23c066b24c5786f1cced398c40c7da7e3800c",
+  "templates/company_admin_login.html": "d8de3962f5b007bbeaa1d354baa0a8c36052996f2f5c7342456c74684bd582fc",
+  "templates/login.html": "f5461f5c0feaa27d629fda9fa278fb3d59deab06f59fea3e641997e1cc618129",
+  "templates/passkeys.html": "3d0df0fd6cd599a5618c428fb249c8352183e6645cf8dd1e8d716fa25fa17bea",
+  "templates/people.html": "0fd241d3d00b560ebcfa23c1f519224934921cf7b5d1cef39fe2f85dd0f2a882",
+  "templates/staff_auth.html": "c8a2f361e3f62aea7f8fb777a58b1b0ba51e32d6a51e3590fc6f87313889d98b",
+  "templates/staff_portal.html": "2ee24fd3e57f660334bbab30add97af06ca9830a799ae51618db595840d01bf2",
+  "static/alport-passkeys.css": "f589d63bc03c28d75bf2336eff2ed7831bbca827f9b9917a5b7e66fd5fa94948",
+  "static/alport-passkeys.js": "f601de709a034cb227ba47dfb873dc8892b272038d7a1f56cc0ae08eb29e5148"
+}

@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>Alport Company Admin</title>
+
+<style>
+
+:root{
+    --green:#1d5a47;
+    --dark:#0d1d17;
+    --bg:#eef3f0;
+    --line:#dbe5df;
+    --muted:#708078;
+    --red:#a3423a;
+}
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:linear-gradient(135deg,#0c1e17,#18392e);
+    min-height:100vh;
+    display:grid;
+    place-items:center;
+    padding:20px;
+}
+
+.box{
+    width:min(430px,100%);
+    background:#fff;
+    border-radius:22px;
+    padding:30px;
+    box-shadow:0 24px 70px #0006;
+}
+
+.logo{
+    font-weight:950;
+    font-size:24px;
+    letter-spacing:-.7px;
+}
+
+.logo span{
+    color:var(--green);
+}
+
+.badge{
+    display:inline-block;
+    margin-top:8px;
+    background:#eaf2ee;
+    color:var(--green);
+    font-size:10px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    padding:6px 9px;
+    border-radius:20px;
+}
+
+h1{
+    font-size:28px;
+    margin:28px 0 7px;
+}
+
+.sub{
+    color:var(--muted);
+    font-size:13px;
+    line-height:1.5;
+    margin-bottom:22px;
+}
+
+label{
+    display:block;
+    font-size:11px;
+    font-weight:850;
+    margin:13px 0 6px;
+}
+
+input{
+    width:100%;
+    padding:13px 14px;
+    border:1px solid var(--line);
+    border-radius:11px;
+    font:inherit;
+    outline:none;
+}
+
+input:focus{
+    border-color:var(--green);
+    box-shadow:0 0 0 3px #1d5a4718;
+}
+
+button{
+    width:100%;
+    margin-top:18px;
+    border:0;
+    background:var(--green);
+    color:white;
+    border-radius:11px;
+    padding:13px;
+    font-weight:900;
+    font-size:13px;
+    cursor:pointer;
+}
+
+button:hover{
+    opacity:.94;
+}
+
+.error{
+    background:#f9ecea;
+    color:var(--red);
+    border:1px solid #f0d2ce;
+    padding:10px 12px;
+    border-radius:10px;
+    font-size:12px;
+    margin-bottom:14px;
+}
+
+.foot{
+    font-size:10px;
+    color:#8a9690;
+    text-align:center;
+    margin-top:18px;
+}
+
+</style>
+
+<link rel="icon" type="image/svg+xml" href="/static/alport-logo.svg"><link rel="stylesheet" href="/static/alport-ui.css?v=20261001"><link rel="stylesheet" href="/static/alport-passkeys.css?v=20261005"><script src="/static/alport-passkeys.js?v=20261005" defer></script></head>
+
+<body class="alport-page page-company-admin-login">
+
+<div class="box">
+
+    <a class="brand-link" href="/" aria-label="Alport home"><img class="brand-image" src="/static/alport-logo.svg" alt="Alport Hospitality Solutions"></a>
+
+    <div class="badge">
+        Company HQ
+    </div>
+
+    <h1>
+        Private admin access
+    </h1>
+
+    <div class="sub">
+        Alport company management.
+        This area is separate from venue and customer accounts.
+    </div>
+
+    {% if error %}
+
+    <div class="error">
+        {{error}}
+    </div>
+
+    {% endif %}
+
+    <form method="post">
+
+        <label>
+            Email
+        </label>
+
+        <input
+            type="email"
+            name="email"
+            autocomplete="username"
+            required
+        >
+
+        <label>
+            Password
+        </label>
+
+        <input
+            type="password"
+            name="password"
+            autocomplete="current-password"
+            required
+        >
+
+        <button>
+            Sign in to Company Admin
+        </button>
+
+    </form>
+<div class="passkey-signin" data-passkey-lane="company-admin"><button type="button" data-passkey-login disabled>Face ID / passkey</button><p data-passkey-status role="status" aria-live="polite">Loading passkey sign-in…</p><p>First time? Sign in with your password, then open Face ID &amp; passkeys in your account to enable it.</p><noscript>Enable JavaScript to use passkeys. You can still use your password.</noscript></div>
+
+
+    <div class="foot">
+        Authorised Alport personnel only
+    </div>
+
+</div>
+
+</body>
+
+</html>

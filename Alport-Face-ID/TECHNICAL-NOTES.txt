@@ -1,0 +1,85 @@
+ALPORT PASSKEY IMPLEMENTATION NOTES
+
+Base: GitHub main 248f791b363e136ff896a6ff348fb4db4ffa5bb0, rechecked 5 October 2026.
+Only the 14 files in UPLOAD are application changes. Full replacement files are
+based on that source. Do not replace a newer app.py blindly if main changes.
+
+Authentication:
+- py_webauthn 3.0.1 verifies registration and assertion proofs.
+- Required user verification and discoverable credentials; no attestation requested.
+- Device/platform/password-manager authenticators are supported; Face ID itself
+  cannot be forced or detected by this website. No bespoke face recognition.
+- Canonical RP ID alporthospitality.co.uk; exact HTTPS origins for root and www.
+  Registration/authentication origin is bound to the server-stored challenge.
+  Cross-origin/iframe ceremonies rejected; settings cannot be framed.
+- Render's internal HTTP scheme is not used to infer the public origin. POST
+  Origin must exactly match an allowed origin and its host must match Host.
+- Unpredictable, short-lived, purpose/lane/session-bound server-side challenges.
+  A row lock atomically consumes each challenge BEFORE signature verification;
+  failed attempts cannot reuse it. Five-minute challenge lifetime.
+- Signature-counter updates and revocation are serialized on the credential row.
+  Zero counters supported for authenticators that use them (e.g. synced passkeys).
+- Current account status, staff membership, password version and subscription are
+  checked at sign-in. Staff retain their existing restrictions and EHO access.
+- Company-admin credentials never authenticate ordinary/staff accounts and vice
+  versa. A business account without staff membership cannot use the staff lane.
+- Normal user handles are random and account-specific; duplicate email addresses
+  in different businesses do not select the account. Account labels include the
+  business code to help distinguish them in the device's passkey chooser.
+- Session is cleared on successful authentication before setting account fields.
+- Enrolment requires existing authenticated access plus the CURRENT password.
+  Removal is also password-confirmed and restricted to the credential's owner.
+- CSRF token plus strict Origin checks on mutations. Rate limiting in PostgreSQL:
+  5 password confirmations per account / 15 minutes, 40 assertion-option requests
+  per session / 15 minutes, and 240 API POSTs per remote address / 15 minutes.
+  Shared proxy IPs can share the last limit; password sign-in remains available.
+- Password version is an HMAC keyed by SECRET_KEY; credential records do not store
+  a password, biometrics or a private key. A password/email change invalidates the
+  applicable credentials. Removing a passkey does not revoke existing sessions.
+- WebAuthn does not replace the separate server-side authorization of payments,
+  payroll, permissions or other actions, or add passkey checks to every such action.
+
+Storage (existing PostgreSQL):
+ alport_passkey_subjects: random handles per user or company-admin identity.
+ alport_passkeys: public keys, credential IDs, counters, labels, status/timestamps.
+ alport_passkey_challenges: expiring challenges, purpose, origin and session binding.
+ alport_passkey_limits: HMAC-protected rate-limit keys and counters.
+ alport_passkey_events: registration, removal and successful sign-in audit entries.
+Expired challenge and rate-limit rows are periodically removed during new flows.
+Revoked credential records and audit events are retained; no biometric payloads
+are logged. Ten current credentials maximum per account.
+
+Optional custom configuration for a SEPARATE staging domain:
+ WEBAUTHN_RP_ID=your-host.example
+ WEBAUTHN_ORIGINS=https://your-host.example
+Origins are comma-separated; each must be HTTPS and equal/subordinate to the RP.
+localhost HTTP is permitted only when explicitly configured with RP ID localhost
+and WEBAUTHN_ORIGINS=http://localhost:PORT. Never enroll production credentials on
+staging. Changing RP IDs requires fresh enrolment; passkeys are domain-bound.
+
+Development validation:
+Install UPLOAD/requirements.txt into an isolated environment, then from the
+unzipped Alport-Face-ID folder run:
+ python -m unittest discover -s CHECKS -v
+The included 31 tests generate real P-256 credential material and validate actual
+WebAuthn signatures using the production verifier. They cover company-admin,
+business, staff permissions, subscription checks, wrong origins/RP/challenges,
+missing user verification, signatures/handles, replay/expiry/session binding,
+counters, password changes, revocation, CSRF, malformed input and rate limits.
+The database adapter uses SQLite and strips PostgreSQL locks; these tests do NOT
+prove concurrent PostgreSQL runtime behaviour. Schema parses with pglast.
+The existing 128 regression checks also passed against the source plus overlay.
+JavaScript syntax checked with node --check; Jinja templates and Python parsed.
+Dependency install and pip check pass. Local read-only browser preview completed.
+Hardware Face ID/Touch ID and live Render/PostgreSQL rollout remain unverified.
+
+Dependency correction:
+GitHub's requirements.txt still pinned cryptography 46.0.1 and omitted pywebpush.
+This package brings forward cryptography 50.0.2 and pywebpush 2.5.0 from the previous
+combined update, and adds webauthn 3.0.1. The resolved requirements were checked
+together, preventing the cryptography>=49 conflict from breaking installation.
+
+References:
+ https://duo-labs.github.io/py_webauthn/registration.html
+ https://duo-labs.github.io/py_webauthn/authentication.html
+ https://developer.apple.com/passkeys/

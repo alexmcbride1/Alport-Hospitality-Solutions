@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>Sign in | Alport Hospitality Solutions</title>
+
+<style>
+:root{
+    --green:#173d32;
+    --green-light:#285c4b;
+    --cream:#f5f1e8;
+    --white:#ffffff;
+    --text:#17211d;
+    --muted:#748079;
+    --line:#dde5df;
+    --gold:#a88a58;
+    --red:#9b4038;
+}
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    min-height:100vh;
+    background:
+        linear-gradient(
+            135deg,
+            #102b23 0%,
+            #173d32 48%,
+            #f3f1eb 48%,
+            #f7f6f2 100%
+        );
+    color:var(--text);
+    font-family:
+        Inter,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    display:grid;
+    place-items:center;
+    padding:24px;
+}
+
+.login-wrap{
+    width:min(440px,100%);
+}
+
+.brand{
+    text-align:center;
+    color:white;
+    margin-bottom:24px;
+}
+
+.brand-mark{
+    width:74px;
+    height:74px;
+    margin:0 auto 14px;
+    display:block;
+}
+
+.brand-name{
+    font-family:Georgia,"Times New Roman",serif;
+    font-size:31px;
+    font-weight:600;
+    letter-spacing:5px;
+    line-height:1;
+}
+
+.brand-sub{
+    margin-top:8px;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:3px;
+    text-transform:uppercase;
+    opacity:.82;
+}
+
+.brand-line{
+    width:48px;
+    height:1px;
+    background:var(--gold);
+    margin:13px auto;
+}
+
+.brand-motto{
+    font-family:Georgia,"Times New Roman",serif;
+    font-size:12px;
+    letter-spacing:2px;
+    opacity:.9;
+}
+
+.card{
+    background:rgba(255,255,255,.98);
+    border:1px solid rgba(255,255,255,.6);
+    border-radius:20px;
+    padding:30px;
+    box-shadow:0 24px 70px rgba(5,20,14,.22);
+}
+
+.eyebrow{
+    color:var(--green);
+    font-size:10px;
+    font-weight:800;
+    letter-spacing:1.8px;
+    text-transform:uppercase;
+}
+
+h1{
+    margin:8px 0 7px;
+    font-family:Georgia,"Times New Roman",serif;
+    font-size:30px;
+    font-weight:500;
+    color:var(--green);
+}
+
+.intro{
+    margin:0 0 23px;
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.55;
+}
+
+.error{
+    margin-bottom:17px;
+    padding:11px 13px;
+    border:1px solid #efd2ce;
+    border-radius:10px;
+    background:#f8e9e7;
+    color:var(--red);
+    font-size:12px;
+    line-height:1.45;
+}
+
+form{
+    display:grid;
+    gap:13px;
+}
+
+.field{
+    display:grid;
+    gap:6px;
+}
+
+label{
+    font-size:10px;
+    font-weight:800;
+    letter-spacing:.3px;
+    color:#405049;
+}
+
+input{
+    width:100%;
+    padding:13px 14px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:white;
+    color:var(--text);
+    font:inherit;
+    font-size:14px;
+    outline:none;
+    transition:.15s ease;
+}
+
+input:focus{
+    border-color:var(--green-light);
+    box-shadow:0 0 0 3px rgba(23,61,50,.08);
+}
+
+button{
+    width:100%;
+    margin-top:5px;
+    border:0;
+    border-radius:10px;
+    padding:13px 16px;
+    background:var(--green);
+    color:white;
+    font-size:12px;
+    font-weight:800;
+    letter-spacing:.3px;
+    cursor:pointer;
+}
+
+button:hover{
+    background:var(--green-light);
+}
+
+.create{
+    display:block;
+    margin-top:18px;
+    text-align:center;
+    color:var(--green);
+    font-size:11px;
+    font-weight:700;
+    text-decoration:none;
+}
+
+.create:hover{
+    text-decoration:underline;
+}
+
+.footer{
+    margin-top:20px;
+    text-align:center;
+    color:rgba(255,255,255,.72);
+    font-size:9px;
+    line-height:1.6;
+}
+
+.footer a{
+    color:inherit;
+    text-decoration:none;
+}
+
+@media(max-width:600px){
+    body{
+        background:#f4f4ef;
+        padding:20px 14px;
+    }
+
+    .brand{
+        color:var(--green);
+    }
+
+    .brand-mark{
+        width:66px;
+        height:66px;
+    }
+
+    .brand-name{
+        font-size:27px;
+    }
+
+    .card{
+        padding:24px 20px;
+    }
+
+    .footer{
+        color:var(--muted);
+    }
+}
+</style>
+<link rel="icon" type="image/svg+xml" href="/static/alport-logo.svg"><link rel="stylesheet" href="/static/alport-ui.css?v=20261001"><link rel="stylesheet" href="/static/alport-passkeys.css?v=20261005"><script src="/static/alport-passkeys.js?v=20261005" defer></script></head>
+
+<body class="alport-page page-login">
+
+<div class="login-wrap">
+
+    <div class="brand">
+
+        <svg
+            class="brand-mark"
+            viewBox="0 0 100 100"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-label="Alport Hospitality Solutions"
+        >
+            <circle
+                cx="50"
+                cy="50"
+                r="46"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+            />
+
+            <path
+                d="M18 62
+                   C28 56,35 54,44 55
+                   C54 56,61 61,70 60
+                   C76 59,81 56,84 54"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+            />
+
+            <path
+                d="M18 69
+                   C30 63,40 62,49 64
+                   C60 67,70 67,84 61"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+            />
+
+            <path
+                d="M25 55
+                   L38 39
+                   L47 49
+                   L57 35
+                   L76 56"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            />
+
+            <circle
+                cx="69"
+                cy="31"
+                r="4"
+                fill="currentColor"
+            />
+        </svg>
+
+        <div class="brand-name">ALPORT</div>
+
+        <div class="brand-sub">
+            Hospitality Solutions
+        </div>
+
+        <div class="brand-line"></div>
+
+        <div class="brand-motto">
+            People &nbsp; Process &nbsp; Profit
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <div class="eyebrow">
+            Alport Hospitality Solutions
+        </div>
+
+        <h1>Welcome back</h1>
+
+        <p class="intro">
+            Sign in to manage your hospitality business.
+        </p>
+
+        {% if error %}
+        <div class="error">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="post">
+
+            <div class="field">
+                <label for="email">EMAIL ADDRESS</label>
+
+                <input
+                    id="email"
+                    type="email"
+                    name="email"
+                    required
+                    autocomplete="email"
+                    placeholder="you@company.co.uk"
+                >
+            </div>
+
+            <div class="field">
+                <label for="password">PASSWORD</label>
+
+                <input
+                    id="password"
+                    type="password"
+                    name="password"
+                    required
+                    autocomplete="current-password"
+                    placeholder="Your password"
+                >
+            </div>
+
+            <button type="submit">
+                Sign in
+            </button>
+
+        </form>
+<div class="passkey-signin" data-passkey-lane="business"><button type="button" data-passkey-login disabled>Face ID / passkey</button><p data-passkey-status role="status" aria-live="polite">Loading passkey sign-in…</p><p>First time? Sign in with your password, then open Face ID &amp; passkeys in your account to enable it.</p><noscript>Enable JavaScript to use passkeys. You can still use your password.</noscript></div>
+
+
+        <a class="create" href="/onboarding">
+            Create a new business
+        </a>
+
+    </div>
+
+    <div class="footer">
+        <div>
+            &copy; Alport Hospitality Solutions
+        </div>
+
+        <div>
+            <a href="/privacy">Privacy Policy</a>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>
