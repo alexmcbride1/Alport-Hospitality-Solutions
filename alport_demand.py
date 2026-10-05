@@ -124,11 +124,11 @@ def register_demand(app,env):
         if end<start or (end-start).days>31:raise ValueError('Select a period of up to 32 days.')
         if end>datetime.now(ZoneInfo('Europe/London')).date():raise ValueError('Stock usage cannot be posted for future dates.')
         return start.isoformat(),end.isoformat()
-    def snapshot(c,start,end,locking=False):
+    def snapshot(c,start,end,locking=False,metadata_only=False):
         org,sid=scope();scope_args=(org,sid)
         # Row locks protect the reviewed sale and recipe versions until posting commits.
         suffix=' FOR SHARE' if locking else ''
-        sales=rows(c,'''SELECT t.connection_id,t.external_id,t.sale_date,t.data FROM alport_till_sales t
+        sales=[] if metadata_only else rows(c,'''SELECT t.connection_id,t.external_id,t.sale_date,t.data FROM alport_till_sales t
              JOIN alport_till_connections tc ON tc.id=t.connection_id
              WHERE tc.organisation_id=%s AND tc.site_id=%s AND t.sale_date BETWEEN %s AND %s
              ORDER BY t.connection_id,t.external_id LIMIT 50001'''+(' FOR SHARE OF t' if locking else ''),scope_args+(start,end))
@@ -139,7 +139,7 @@ def register_demand(app,env):
         for part in rows(c,'SELECT * FROM menu_components WHERE organisation_id=%s AND site_id=%s ORDER BY id'+suffix,scope_args):
             if part['menu_item_id'] in menus:recipes[part['menu_item_id']].append(part)
         mappings={(x['connection_id'],x['item_key']):x for x in rows(c,'SELECT * FROM alport_till_recipe_map WHERE organisation_id=%s AND site_id=%s',scope_args)}
-        posted={(x['connection_id'],x['external_id']):x for x in rows(c,'SELECT * FROM alport_till_consumed WHERE organisation_id=%s AND site_id=%s',scope_args)}
+        posted={} if metadata_only else {(x['connection_id'],x['external_id']):x for x in rows(c,'SELECT * FROM alport_till_consumed WHERE organisation_id=%s AND site_id=%s',scope_args)}
         return sales,stocks,menus,recipes,mappings,posted
     def plan(c,start,end,locking=False):
         org,sid=scope();sales,stocks,menus,recipes,maps,posted=snapshot(c,start,end,locking)
@@ -252,14 +252,29 @@ def register_demand(app,env):
                 weather_days={x['date']:x for x in weather_snapshot['payload']['daily']}
                 if len([x for x in weather_days if today.isoformat()<=x<=(today+timedelta(days=horizon-1)).isoformat()])<horizon:context_warnings.append('Weather is unavailable for part of this period; those days have no automatic weather adjustment.')
             else:context_warnings.append('No fresh venue weather snapshot. Automatic weather adjustments are omitted; refresh weather before relying on this suggestion.')
-        with conn() as c:
-            sales,stocks,menus,recipes,maps,posted=snapshot(c,(today-timedelta(days=history_days)).isoformat(),(today-timedelta(days=1)).isoformat())
         daily=defaultdict(lambda:defaultdict(float));excluded=0;observed=set()
-        for row in sales:
-            try:use=usage_for_sale(unpack(row['data']),{key:m for (cid,key),m in maps.items() if cid==row['connection_id']},recipes,stocks)
-            except (ValueError,TypeError,KeyError):excluded+=1;continue
-            observed.add(row['sale_date'])
-            for iid,qty in use.items():daily[iid][row['sale_date']]+=qty
+        with conn() as c:
+            _,stocks,menus,recipes,maps,posted=snapshot(c,(today-timedelta(days=history_days)).isoformat(),(today-timedelta(days=1)).isoformat(),metadata_only=True)
+            by_connection=defaultdict(dict)
+            for (cid,key),mapping in maps.items():by_connection[cid][key]=mapping
+            after_cid=0;after_key=''
+            while True:
+                chunk=rows(c,'''SELECT t.connection_id,t.external_id,t.sale_date,t.data FROM alport_till_sales t JOIN alport_till_connections tc ON tc.id=t.connection_id
+                    WHERE tc.organisation_id=%s AND tc.site_id=%s AND t.sale_date BETWEEN %s AND %s
+                    AND (t.connection_id>%s OR (t.connection_id=%s AND t.external_id>%s))
+                    ORDER BY t.connection_id,t.external_id LIMIT 2000''',(org,sid,(today-timedelta(days=history_days)).isoformat(),(today-timedelta(days=1)).isoformat(),after_cid,after_cid,after_key))
+                if not chunk:break
+                for row in chunk:
+                    try:use=usage_for_sale(unpack(row['data']),by_connection.get(row['connection_id'],{}),recipes,stocks)
+                    except (ValueError,TypeError,KeyError):excluded+=1;continue
+                    observed.add(row['sale_date'])
+                    for iid,qty in use.items():daily[iid][row['sale_date']]+=qty
+                after_cid,after_key=chunk[-1]['connection_id'],chunk[-1]['external_id']
+        if app.extensions.get('alport_manual_daily'):
+            manual=app.extensions['alport_manual_daily'](org,sid,today-timedelta(days=history_days),today,recipes,stocks)
+            excluded+=manual['excluded'];observed.update(manual['days'])
+            for iid,values in manual['daily'].items():
+                for day,qty in values.items():daily[iid][day]+=qty
         # A day with valid imported sales but no sales of this ingredient is an observed zero for that ingredient.
         for iid in stocks:
             for day in observed:daily[iid].setdefault(day,0)
@@ -276,6 +291,7 @@ def register_demand(app,env):
         lines=[]
         for iid,stock in stocks.items():
             prediction=estimate_history(daily[iid],today,horizon,bookings,weather,events,profile,weather_days,events_list)
+            if app.extensions.get('alport_learned_forecast'):prediction=app.extensions['alport_learned_forecast'](org,sid,iid,daily[iid],today,prediction,bookings,profile,weather,events)
             deliveries=incoming.get(iid,[])
             incoming_units=sum(x['quantity'] for x in deliveries if x['eligible'] and x['unit']==stock['unit'])
             shortage=max(0,prediction['units']+float(stock['par_level'])-float(stock['on_hand'])-incoming_units)
@@ -317,7 +333,7 @@ def register_demand(app,env):
             if key in profile['date_overrides']:closed=profile['date_overrides'][key]=='closed'
             if closed and bookings.get(key,0):context_warnings.append(key+': bookings exist on a day marked closed. Review opening settings.')
         result={'profile':profile,'history_days':history_days,'weather_context':weather_snapshot if weather_days else None,'context_warnings':context_warnings,'missing_history_days':history_days-len(observed),'supplier_checks':supplier_checks,'today':today.isoformat(),'days':horizon,'lines':lines,'bookings':bookings,'events':events_list,'weather_pct':weather,'event_pct':events,'note':note,'excluded_sales':excluded,'observed_days':len(observed),'existing_drafts':pending,
-                'method':'10% yesterday, 20% last 7 days, 30% last 28 days, 40% selected longer history, reweighted when data is absent. Observed days only; weekday blend with 2+ observations. Daily bookings can increase demand up to 2×. Saved closure settings apply to future days. Staff-configured weather/event effects and manual adjustments combine within -50% to +200% per day; they are assumptions, not learned effects. Par level is a safety buffer. Unreceived quantities on placed orders due within this window reduce suggested purchases. Overdue orders and deliveries outside this window are excluded; review those exceptions before buying. Drafts and approvals are not incoming stock.'}
+                'method':'10% yesterday, 20% last 7 days, 30% last 28 days, 40% selected longer history, reweighted when data is absent. Observed days only; weekday blend with 2+ observations. Daily bookings can increase demand up to 2×. Saved closure settings apply to future days. Staff-configured weather/event effects and manual adjustments combine within -50% to +200% per day; these are assumptions unless the separate learned model passes its held-out comparison and has fresh coordinate-matched weather. Applied learned factors are shown per day. Par level is a safety buffer. Unreceived quantities on placed orders due within this window reduce suggested purchases. Overdue orders and deliveries outside this window are excluded; review those exceptions before buying. Drafts and approvals are not incoming stock.'}
         result['fingerprint']=digest({k:v for k,v in result.items() if k!='existing_drafts'});return result
     @bp.post('/api/demand/forecast')
     def forecast_preview():return jsonify(forecast(request.get_json() or {}))
