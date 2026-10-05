@@ -1,0 +1,5 @@
+tesseract.js 7.0.0
+tesseract.js-core 7.0.0
+@tesseract.js-data/eng 1.0.0
+pdfjs-dist 6.3.289
+Downloaded from official npm registry tarballs; bundled locally so scanning does not send invoice images to a third-party service.
