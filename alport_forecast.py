@@ -1,5 +1,5 @@
 """Explainable longer-history forecasts and venue-specific planning context."""
-import json,math,secrets,hmac,hashlib
+import json,math,secrets,hmac,hashlib,os
 from datetime import date,datetime,timedelta
 from zoneinfo import ZoneInfo
 from flask import Blueprint,request,session,jsonify
@@ -146,6 +146,15 @@ def register_forecast(app,env):
   if request.query_string:raise ValueError('Use the saved venue location for planning weather.')
   cached=get_weather(q,org,sid,s)
   if cached and cached['usable'] and (local_now()-datetime.fromisoformat(cached['fetched_at'])).total_seconds()<300:return jsonify(cached)
+  if app.extensions.get('alport_manual_daily') and os.getenv('OPEN_METEO_API_KEY'):
+   p=q('SELECT * FROM alport_planning_settings WHERE organisation_id=? AND site_id=?',(org,sid),True)
+   if p and p['latitude'] is not None and p['longitude'] is not None:
+    from alport_jobs import refresh_weather
+    try:
+     with conn() as c:
+      c.execute('SELECT pg_advisory_xact_lock(%s)',(710000000000+int(sid),));refresh_weather(c,org,sid,p['latitude'],p['longitude'],os.environ['OPEN_METEO_API_KEY'])
+    except Exception:raise ValueError('Configured weather refresh failed. Check the commercial key and venue coordinates.') from None
+    return jsonify(get_weather(q,org,sid,s))
   if 'weather' not in env:raise ValueError('Venue weather service is not installed.')
   response=app.make_response(env['weather']());data=response.get_json(silent=True)
   if response.status_code!=200 or not isinstance(data,dict) or not isinstance(data.get('daily'),list):raise ValueError('Weather could not be loaded. Check the venue location and try again.')
