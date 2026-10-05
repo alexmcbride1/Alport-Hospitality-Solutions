@@ -12,7 +12,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS alport_staff_access(
  id BIGSERIAL PRIMARY KEY, organisation_id BIGINT NOT NULL, site_id BIGINT NOT NULL,
- employee_id BIGINT NOT NULL UNIQUE REFERENCES employees(id), user_id BIGINT NOT NULL UNIQUE REFERENCES users(id),
+ employee_id BIGINT NOT NULL UNIQUE REFERENCES employees(id), user_id BIGINT NOT NULL REFERENCES users(id),
  profile TEXT NOT NULL CHECK(profile IN ('staff','orders','full','disabled')),
  invite_hash TEXT UNIQUE, invite_expires TEXT, activated_at TEXT, version INTEGER NOT NULL DEFAULT 1,
  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -52,14 +52,20 @@ def text(d,key,limit=1000):
 def register_staff(app,env):
     conn,q=env['conn'],env['q']
     with conn() as c:
+        c.execute('SELECT pg_advisory_xact_lock(%s)',(739000000002,))
         for sql in SCHEMA.split(';'):
             if sql.strip():c.execute(sql)
+    with conn() as c:
+        c.execute('ALTER TABLE alport_staff_access DROP CONSTRAINT IF EXISTS alport_staff_access_user_id_key')
+        c.execute('ALTER TABLE alport_staff_access ADD COLUMN IF NOT EXISTS imported_login INTEGER NOT NULL DEFAULT 0')
+        c.execute('CREATE UNIQUE INDEX IF NOT EXISTS alport_staff_user_site ON alport_staff_access(user_id,site_id)')
     bp=Blueprint('alport_staff',__name__)
     def access(u=None):
         u=u or env['user']()
-        return q('''SELECT a.*,e.active AS employee_active,s.active AS site_active FROM alport_staff_access a
-            JOIN employees e ON e.id=a.employee_id JOIN sites s ON s.id=a.site_id
-            WHERE a.user_id=? AND a.organisation_id=?''',(u['id'],u['organisation_id']),True) if u else None
+        if not u:return None
+        chosen=session.get('staff_site_id',session.get('site_id')) if session.get('user_id')==u['id'] else None
+        rows=q('SELECT a.*,e.active AS employee_active,s.active AS site_active FROM alport_staff_access a JOIN employees e ON e.id=a.employee_id JOIN sites s ON s.id=a.site_id WHERE a.user_id=? AND a.organisation_id=? ORDER BY a.id',(u['id'],u['organisation_id']))
+        return next((a for a in rows if a['site_id']==chosen),None) or next((a for a in rows if a['profile']!='disabled' and a['employee_active']==1 and a['site_active']==1 and a['activated_at']),None) or (rows[0] if rows else None)
     def live(a):
         return a and a['profile']!='disabled' and a['employee_active']==1 and a['site_active']==1 and bool(a['activated_at'])
     def csrf():
@@ -68,11 +74,12 @@ def register_staff(app,env):
     def event(c,u,e,kind,payload):
         c.execute('''INSERT INTO alport_staff_events(organisation_id,site_id,employee_id,actor_id,event_type,payload,created_at)
             VALUES(%s,%s,%s,%s,%s,%s,%s)''',(e['organisation_id'],e['site_id'],e.get('employee_id',e.get('id')),u['id'],kind,json.dumps(payload),stamp()))
+        if app.extensions.get('alport_staff_notify'):app.extensions['alport_staff_notify'](c,u,e,kind,payload)
     def lock(c,org):
         c.execute('SELECT pg_advisory_xact_lock(%s)',(720000000000+int(org),))
     def manager():
         u,s=env['user'](),env['current_site']()
-        if not u or not s or u['role'] not in PEOPLE_ROLES:raise PermissionError('People manager access required.')
+        if not u or not s or u['role'] not in PEOPLE_ROLES or (access(u) and access(u)['profile']!='full'):raise PermissionError('People manager access required.')
         return u,s
     def employee(c,eid,u,s):
         e=c.execute('SELECT * FROM employees WHERE id=%s AND organisation_id=%s AND site_id=%s AND active=1',(eid,u['organisation_id'],s['id'])).fetchone()
@@ -86,7 +93,7 @@ def register_staff(app,env):
         prior=(date.fromisoformat(start)-timedelta(days=1)).isoformat()
         return c.execute("""SELECT id,shift_date,start_time,end_time,status FROM shifts
             WHERE organisation_id=%s AND site_id=%s AND employee_id=%s AND shift_date<=%s
-            AND (shift_date>=%s OR (shift_date=%s AND end_time<start_time AND end_time>'00:00'))
+            AND (shift_date>=%s OR (shift_date=%s AND end_time<=start_time AND end_time>'00:00'))
             AND status NOT IN ('Cancelled','Declined') ORDER BY shift_date""",(org,sid,eid,end,start,prior)).fetchall()
     def invite(c,a):
         token=secrets.token_urlsafe(32)
@@ -99,12 +106,12 @@ def register_staff(app,env):
     # Fail closed for staff on every legacy/new route, not merely on navigation links.
     @app.before_request
     def restrict_staff():
-        if request.endpoint=='static':return None
+        if request.endpoint in ('static','alport_people.service_worker'):return None
         u=env['user']()
         if not u:return None
         a=access(u)
         if a and (not live(a) or session.get('staff_auth_hash')!=hashlib.sha256(u['password_hash'].encode()).hexdigest()):
-            if request.endpoint not in ('logout','alport_staff.activate','alport_staff.login'):
+            if request.endpoint not in ('logout','alport_staff.activate','alport_staff.login','alport_people.sites','alport_people.select_site'):
                 return jsonify(error='Staff access is inactive. Contact your manager.'),403
         limited=(a and a['profile'] in ('staff','orders')) or u['role'] in ('Staff','User')
         if not limited:return None
@@ -113,6 +120,7 @@ def register_staff(app,env):
                  'alport_staff.portal','alport_staff.me','alport_staff.request_leave','alport_staff.withdraw',
                  'alport_staff.orders','alport_staff.order_detail','alport_staff.new_order','alport_staff.password','alport_staff.compliance','alport_staff.training','staff_onboarding_portal','staff_onboarding_details','staff_training_submit'} | eho_endpoints
         if request.endpoint=='app_home':return redirect('/staff')
+        if request.blueprint=='alport_people':allowed.add(request.endpoint)
         if request.endpoint not in allowed:return jsonify(error='This account has personal staff and compliance access only.'),403
         if request.endpoint in ('staff_onboarding_portal','staff_onboarding_details','staff_training_submit'):
             if not live(a) or not q('SELECT id FROM employee_onboarding WHERE token=? AND employee_id=? AND organisation_id=? AND site_id=?',(request.view_args.get('token'),a['employee_id'],a['organisation_id'],a['site_id']),True):return jsonify(error='This onboarding invitation does not belong to your account.'),403
@@ -185,7 +193,7 @@ def register_staff(app,env):
                         if env['subscription_blocks_access'](env['subscription_for'](u['organisation_id'])):error='Your business subscription needs attention.'
                         else:
                             c.execute('DELETE FROM alport_staff_login_limits WHERE identity_hash=%s',(identity,))
-                            session.clear();session.update(user_id=u['id'],site_id=a['site_id'],staff_auth_hash=hashlib.sha256(u['password_hash'].encode()).hexdigest())
+                            session.clear();session.update(user_id=u['id'],site_id=a['site_id'],staff_site_id=a['site_id'],staff_auth_hash=hashlib.sha256(u['password_hash'].encode()).hexdigest())
                             return redirect('/staff')
                     else:
                         n=(lim['failures'] if lim and not lim['blocked_until'] else 0)+1
@@ -216,6 +224,11 @@ def register_staff(app,env):
                 return redirect('/staff/login?organisation='+str(a['organisation_id']))
         response=app.make_response(render_template('staff_auth.html',activate=True,csrf=csrf(),error=error,organisation=a['organisation_id']))
         response.headers['Referrer-Policy']='no-referrer';response.headers['Cache-Control']='no-store';return response
+    def leave_conflicts(c,u,s,r):
+        candidates=overlapping(c,u['organisation_id'],s['id'],r['employee_id'],r['start_date'],r['end_date'])
+        if app.extensions.get('alport_leave_overlap'):
+            return [x for x in candidates if app.extensions['alport_leave_overlap'](dict(r),dict(x))]
+        return candidates
     @bp.get('/api/staff-access/token')
     def access_token():
         manager();return jsonify(csrf=csrf())
@@ -228,7 +241,7 @@ def register_staff(app,env):
         leave=q('''SELECT l.*,e.name FROM alport_leave_requests l JOIN employees e ON e.id=l.employee_id
             WHERE l.organisation_id=? AND l.site_id=? ORDER BY CASE WHEN l.status='Pending' THEN 0 ELSE 1 END,l.id DESC LIMIT 300''',(u['organisation_id'],s['id']))
         with conn() as c:
-            for r in leave:r['conflicts']=overlapping(c,u['organisation_id'],s['id'],r['employee_id'],r['start_date'],r['end_date'])
+            for r in leave:r['conflicts']=leave_conflicts(c,u,s,r)
         return jsonify(employees=rows,leave=leave,can_grant_full=u['role'] in ('Owner','Admin'),site=s['name'])
     @bp.post('/api/staff-access/<int:eid>')
     def grant(eid):
@@ -240,6 +253,18 @@ def register_staff(app,env):
             if (profile=='full' or (a and a['profile']=='full')) and u['role'] not in ('Owner','Admin'):raise PermissionError('Only Owner or Admin can change full management access.')
             if a and a['user_id']==u['id']:raise PermissionError('Ask another administrator to change your access.')
             if int(d.get('version') or 0)!=(a['version'] if a else 0):raise ValueError('Access changed. Refresh before saving.')
+            if not a:
+                if d.get('existing_user_id'):
+                    if u['role'] not in ('Owner','Admin') or d.get('link_confirmed') is not True:raise PermissionError('Owner/Admin must explicitly confirm linking an existing login.')
+                    target=c.execute('SELECT * FROM users WHERE id=%s AND organisation_id=%s AND active=1',(d['existing_user_id'],u['organisation_id'])).fetchone()
+                    if not target or str(target['email']).strip().lower()!=str(e['email']).strip().lower():raise ValueError('Select the active login with this employee’s exact email in this business.')
+                    if profile=='disabled':raise ValueError('Choose active access when linking an existing login.')
+                    if target['role'] in ('Owner','Admin') and profile!='full':raise ValueError('Owner/Admin accounts must retain full access; change those roles through account administration.')
+                    if c.execute('SELECT id FROM alport_staff_access WHERE user_id=%s AND site_id=%s',(target['id'],s['id'])).fetchone():raise ValueError('This account already has an employee record at this venue.')
+                    aid=c.execute('INSERT INTO alport_staff_access(organisation_id,site_id,employee_id,user_id,profile,activated_at,imported_login,created_at,updated_at) VALUES(%s,%s,%s,%s,%s,%s,1,%s,%s) RETURNING id',(u['organisation_id'],s['id'],eid,target['id'],profile,stamp(),stamp(),stamp())).fetchone()['id']
+                    a=c.execute('SELECT * FROM alport_staff_access WHERE id=%s',(aid,)).fetchone()
+                    if target['id']==u['id']:session.update(staff_site_id=s['id'],staff_auth_hash=hashlib.sha256(target['password_hash'].encode()).hexdigest())
+                    event(c,u,e,'Existing login linked',{'user_id':target['id'],'profile':profile})
             if not a:
                 if profile=='disabled':raise ValueError('No portal account exists for this employee.')
                 email=str(e.get('email') or '').strip().lower()
@@ -253,7 +278,12 @@ def register_staff(app,env):
             else:
                 c.execute('UPDATE alport_staff_access SET profile=%s,updated_at=%s,version=version+1,invite_hash=NULL,invite_expires=NULL WHERE id=%s',(profile,stamp(),a['id']))
                 a=c.execute('SELECT * FROM alport_staff_access WHERE id=%s',(a['id'],)).fetchone()
-            c.execute('UPDATE users SET role=%s WHERE id=%s',('Manager' if profile=='full' else 'Staff',a['user_id']))
+            target=c.execute('SELECT role FROM users WHERE id=%s',(a['user_id'],)).fetchone()
+            if target['role'] in ('Owner','Admin') and profile!='full':raise ValueError('Owner/Admin accounts must retain their existing role.')
+            if target['role'] not in ('Owner','Admin'):
+                full=c.execute("SELECT id FROM alport_staff_access WHERE user_id=%s AND profile='full'",(a['user_id'],)).fetchone()
+                c.execute('UPDATE users SET role=%s WHERE id=%s',('Manager' if full else 'Staff',a['user_id']))
+            if a.get('imported_login') and d.get('reissue') is True:raise ValueError('This is a linked existing login. Use its existing password or the account’s own password recovery procedure.')
             link=invite(c,a) if profile!='disabled' and (not a['activated_at'] or d.get('reissue') is True) else None
             event(c,u,e,'Access changed',{'profile':profile,'invitation_created':bool(link)})
         return jsonify(ok=True,invite_url=link,organisation=u['organisation_id'])
@@ -264,7 +294,7 @@ def register_staff(app,env):
         start=(date.today()-timedelta(days=31)).isoformat();end=(date.today()+timedelta(days=366)).isoformat()
         shifts=q('''SELECT id,shift_date,start_time,end_time,break_minutes,status FROM shifts
             WHERE employee_id=? AND organisation_id=? AND site_id=? AND shift_date>=? AND shift_date<=? ORDER BY shift_date,start_time''',(a['employee_id'],a['organisation_id'],a['site_id'],start,end))
-        leave=q('SELECT id,start_date,end_date,leave_type,note,status,version,decision_note FROM alport_leave_requests WHERE employee_id=? AND organisation_id=? AND site_id=? ORDER BY id DESC LIMIT 200',(a['employee_id'],a['organisation_id'],a['site_id']))
+        leave=q('SELECT id,start_date,end_date,leave_type,note,status,version,decision_note,units,leave_start,leave_end FROM alport_leave_requests WHERE employee_id=? AND organisation_id=? AND site_id=? ORDER BY id DESC LIMIT 200',(a['employee_id'],a['organisation_id'],a['site_id']))
         onboarding=q('SELECT token FROM employee_onboarding WHERE employee_id=? AND organisation_id=? AND site_id=?',(a['employee_id'],a['organisation_id'],a['site_id']),True)
         return jsonify(onboarding_url='/staff-onboarding/'+onboarding['token'] if onboarding else None,employee=e,shifts=shifts,leave=leave,access=a['profile'],site=q('SELECT name FROM sites WHERE id=?',(a['site_id'],),True)['name'])
     @bp.post('/api/staff/password')
@@ -278,6 +308,7 @@ def register_staff(app,env):
         session.clear();return jsonify(ok=True)
     @bp.post('/api/staff/leave')
     def request_leave():
+        if app.extensions.get('alport_leave_request'):return app.extensions['alport_leave_request']()
         u,a=own();d=request.get_json();start,end=day(d.get('start_date')),day(d.get('end_date'))
         if start<date.today().isoformat() or end<start or (date.fromisoformat(end)-date.fromisoformat(start)).days>365:raise ValueError('Choose future dates, in order, covering no more than one year.')
         kind=d.get('leave_type');note=text(d,'note');key=text(d,'request_key',100)
@@ -314,8 +345,9 @@ def register_staff(app,env):
             a=access(u)
             if a and a['employee_id']==r['employee_id']:raise PermissionError('Another manager must decide your own request.')
             if (status=='Cancelled' and r['status']!='Approved') or (status!='Cancelled' and r['status']!='Pending'):raise ValueError('This decision is not available for the current status.')
-            conflicts=overlapping(c,u['organisation_id'],s['id'],r['employee_id'],r['start_date'],r['end_date'])
+            conflicts=leave_conflicts(c,u,s,r)
             if status=='Approved' and conflicts and d.get('conflicts_acknowledged') is not True:raise ValueError('Existing shifts overlap. Confirm you will arrange cover and update the rota.')
+            if app.extensions.get('alport_leave_decision'):app.extensions['alport_leave_decision'](c,dict(r),status)
             c.execute('UPDATE alport_leave_requests SET status=%s,decided_by=%s,decided_at=%s,decision_note=%s,version=version+1 WHERE id=%s',(status,u['id'],stamp(),note,rid))
             event(c,u,dict(r),'Leave '+status.lower(),{'request_id':rid,'note':note,'conflicting_shift_ids':[x['id'] for x in conflicts]})
         return jsonify(ok=True)
@@ -329,7 +361,7 @@ def register_staff(app,env):
             if not r or r['status']!='Approved' or r['version']!=d.get('version'):raise ValueError('Refresh the approved request first.')
             a=access(u)
             if a and a['employee_id']==r['employee_id']:raise PermissionError('Another manager must update your shifts for approved leave.')
-            rows=[x for x in overlapping(c,u['organisation_id'],s['id'],r['employee_id'],r['start_date'],r['end_date']) if x['status']=='Scheduled' and x['shift_date']>=date.today().isoformat()]
+            rows=[x for x in leave_conflicts(c,u,s,r) if x['status']=='Scheduled' and x['shift_date']>=date.today().isoformat()]
             for shift in rows:c.execute("UPDATE shifts SET status='Cancelled' WHERE id=%s",(shift['id'],))
             event(c,u,dict(r),'Leave shifts cancelled',{'request_id':rid,'shift_ids':[x['id'] for x in rows],'note':note})
             c.execute('UPDATE alport_leave_requests SET version=version+1 WHERE id=%s',(rid,))
@@ -388,7 +420,9 @@ def register_staff(app,env):
                     start=day(d.get('shift_date'));end=start
                     if str(d.get('end_time') or '')<str(d.get('start_time') or '') and str(d.get('end_time') or '')>'00:00':end=(date.fromisoformat(start)+timedelta(days=1)).isoformat()
                 except ValueError:return jsonify(error='Choose a valid shift date.'),400
-                if c.execute("SELECT id FROM alport_leave_requests WHERE organisation_id=%s AND site_id=%s AND employee_id=%s AND status='Approved' AND start_date<=%s AND end_date>=%s",(u['organisation_id'],s['id'],d.get('employee_id'),end,start)).fetchone():return jsonify(error='This employee has approved time off during that shift. Review the leave before assigning it.'),409
+                conflicts=app.extensions.get('alport_shift_leave_conflicts')
+                if conflicts and conflicts(c,u['organisation_id'],s['id'],d):return jsonify(error='This shift overlaps approved time off.'),409
+                if not conflicts and c.execute("SELECT id FROM alport_leave_requests WHERE organisation_id=%s AND site_id=%s AND employee_id=%s AND status='Approved' AND start_date<=%s AND end_date>=%s",(u['organisation_id'],s['id'],d.get('employee_id'),end,start)).fetchone():return jsonify(error='This employee has approved time off during that shift. Review the leave before assigning it.'),409
                 return previous()
         app.view_functions['add_shift']=guarded_shift
     # Staff are authorized for the complete operational EHO feature set only.
@@ -414,4 +448,5 @@ def register_staff(app,env):
                         data[key]=[r for r in data[key] if r.get('category')!='Fit to work']
                 response.set_data(app.json.dumps(data))
         return response
+    app.extensions.update(alport_staff_own=own,alport_staff_manager=manager,alport_staff_access=access,alport_staff_live=live,alport_staff_event=event,alport_staff_csrf=csrf)
     app.register_blueprint(bp)
