@@ -1307,7 +1307,7 @@ def login():
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
         u = q(
-            "SELECT * FROM users WHERE lower(email)=? AND active=1 ORDER BY id LIMIT 1",
+            "SELECT * FROM users WHERE lower(email)=? AND active=1 AND NOT EXISTS (SELECT 1 FROM alport_staff_access a WHERE a.user_id=users.id) ORDER BY id LIMIT 1",
             (email,),
             True,
         )
@@ -1327,7 +1327,7 @@ def login():
             if sub and sub.get("status") == "Payment required":
                 return redirect(url_for("subscribe"))
             return redirect(url_for("app_home"))
-        return render_template("login.html", error="Incorrect email or password.")
+        return render_template("login.html", error="Incorrect email or password. Staff portal accounts should use /staff/login.")
     return render_template("login.html")
 
 
@@ -4076,6 +4076,10 @@ register_demand(app, globals())
 
 from alport_invoice_scan import register_invoice_scan
 register_invoice_scan(app, globals())
+
+
+from alport_staff import register_staff
+register_staff(app, globals())
 
 
 if __name__ == "__main__":
