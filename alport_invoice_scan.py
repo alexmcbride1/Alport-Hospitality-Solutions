@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS alport_invoice_reviews(
  invoice_key TEXT NOT NULL,request_key TEXT NOT NULL,payload JSONB NOT NULL,
  created_by BIGINT NOT NULL,created_at TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,
  UNIQUE(organisation_id,site_id,supplier_id,invoice_key),UNIQUE(organisation_id,site_id,request_key));
+CREATE TABLE IF NOT EXISTS alport_invoice_order_links(
+ review_id BIGINT NOT NULL REFERENCES alport_invoice_reviews(id),order_id BIGINT NOT NULL REFERENCES alport_purchase_orders(id),PRIMARY KEY(review_id,order_id));
 CREATE TABLE IF NOT EXISTS alport_invoice_files(
  id BIGSERIAL PRIMARY KEY,review_id BIGINT NOT NULL REFERENCES alport_invoice_reviews(id),
  filename TEXT NOT NULL,mimetype TEXT NOT NULL,data BYTEA NOT NULL,sha256 TEXT NOT NULL);
@@ -27,6 +29,7 @@ def register_invoice_scan(app,env):
  with conn() as c:
   for sql in SCHEMA.split(';'):
    if sql.strip():c.execute(sql)
+ with conn() as c:c.execute('INSERT INTO alport_invoice_order_links(review_id,order_id) SELECT id,order_id FROM alport_invoice_reviews WHERE order_id IS NOT NULL ON CONFLICT DO NOTHING')
  bp=Blueprint('invoice_scan',__name__)
  roles=('Owner','Admin','Finance','General Manager','Manager')
  def context():
@@ -133,20 +136,24 @@ def register_invoice_scan(app,env):
    existing=rows(c,'SELECT invoice_number FROM invoices WHERE organisation_id=%s AND site_id=%s AND LOWER(TRIM(supplier))=LOWER(TRIM(%s))',(org,sid,su['name']))
    if any(re.sub(r'\s+','',x['invoice_number']).casefold()==invoice_key for x in existing):raise ValueError('This supplier invoice number is already recorded. Open the existing invoice instead.')
    if c.execute('SELECT id FROM alport_invoice_reviews WHERE organisation_id=%s AND site_id=%s AND supplier_id=%s AND invoice_key=%s',(org,sid,supplier,invoice_key)).fetchone():raise ValueError('Duplicate supplier invoice.')
-   oid=integer(d['order_id']) if d.get('order_id') else None;order=None;orderlines={}
-   if oid:
-    order=c.execute('SELECT * FROM alport_purchase_orders WHERE id=%s AND organisation_id=%s AND site_id=%s AND supplier_id=%s',(oid,org,sid,supplier)).fetchone()
-    if not order:raise ValueError('Purchase order must belong to this venue and supplier.')
-    orderlines={x['id']:x for x in rows(c,'SELECT * FROM alport_purchase_lines WHERE order_id=%s',(oid,))}
+   raw_ids=d.get('order_ids') or ([d['order_id']] if d.get('order_id') else [])
+   if not isinstance(raw_ids,list) or len(raw_ids)>20:raise ValueError('Choose at most 20 purchase orders.')
+   oids=sorted(set(integer(x) for x in raw_ids));oid=oids[0] if oids else None
+   orderlines={};orders={}
+   for poid in oids:
+    order=c.execute('SELECT * FROM alport_purchase_orders WHERE id=%s AND organisation_id=%s AND site_id=%s AND supplier_id=%s',(poid,org,sid,supplier)).fetchone()
+    if not order:raise ValueError('Every purchase order must belong to this venue and supplier.')
+    orders[poid]=order
+    orderlines.update({x['id']:x for x in rows(c,'SELECT * FROM alport_purchase_lines WHERE order_id=%s',(poid,))})
    mode=d.get('receipt_mode')
    if mode not in ('existing','new','none'):raise ValueError('Choose how delivery is recorded.')
    if mode!='none' and not oid:raise ValueError('Choose a purchase order for delivery reconciliation, or select invoice only.')
    if mode=='new':
-    if order['status'] not in ('Ordered','Part received'):raise ValueError('Only outstanding placed orders can receive goods.')
+    if any(o['status'] not in ('Ordered','Part received') for o in orders.values()):raise ValueError('Only outstanding placed orders can receive goods.')
     if c.execute("SELECT id FROM stocktakes WHERE organisation_id=%s AND site_id=%s AND status='Open'",(org,sid)).fetchone():raise ValueError('Complete the open stocktake before receiving goods.')
    used={}
    if oid:
-    for x in rows(c,'SELECT payload FROM alport_invoice_reviews WHERE organisation_id=%s AND site_id=%s AND order_id=%s',(org,sid,oid)):
+    for x in rows(c,'SELECT payload FROM alport_invoice_reviews WHERE organisation_id=%s AND site_id=%s',(org,sid)):
      previous=unpack(x['payload'])
      for line in previous['lines']:
       if previous.get('receipt_mode') in ('existing','new') and line.get('order_line_id'):used[line['order_line_id']]=used.get(line['order_line_id'],Decimal(0))+Decimal(str(line['received']))
@@ -159,7 +166,7 @@ def register_invoice_scan(app,env):
     if price!=price.quantize(Decimal('.0001')):raise ValueError('Unit price supports four decimal places.')
     if (billed*price).quantize(Decimal('.01'),rounding=ROUND_HALF_UP)!=line_net:raise ValueError('Line quantity × net unit price must equal line net. Review discounts and pack units.')
     sum_net+=line_net;lid=integer(line['order_line_id']) if line.get('order_line_id') else None;ol=orderlines.get(lid)
-    if lid and (not ol or lid in seen):raise ValueError('Map each purchase-order line once, to this order only.')
+    if lid and (not ol or lid in seen):raise ValueError('Map each purchase-order line once, to the selected orders only.')
     if lid:seen.add(lid)
     issues=[];kind=text(line,'discrepancy',60);note=text(line,'note')
     if received!=billed:issues.append('Invoiced and accepted quantities differ')
@@ -176,8 +183,8 @@ def register_invoice_scan(app,env):
       if Decimal(str(stock['on_hand']))+units>Decimal('1000000000'):raise ValueError('Resulting stock quantity is too large.')
       c.execute('UPDATE stock_items SET on_hand=on_hand+%s WHERE id=%s',(float(units),ol['stock_item_id']))
       c.execute('UPDATE alport_purchase_lines SET received_packs=received_packs+%s WHERE id=%s',(float(received),lid))
-      c.execute('INSERT INTO stock_movements(organisation_id,site_id,stock_item_id,quantity,movement_type,note,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s)',(org,sid,ol['stock_item_id'],float(units),'Purchase receipt',f'Invoice {invoice_number}; PO #{oid}',env['now']()))
-      receipts.append({'line_id':lid,'packs':float(received),'stock_units':float(units)})
+      c.execute('INSERT INTO stock_movements(organisation_id,site_id,stock_item_id,quantity,movement_type,note,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s)',(org,sid,ol['stock_item_id'],float(units),'Purchase receipt',f'Invoice {invoice_number}; PO #{ol["order_id"]}',env['now']()))
+      receipts.append({'order_id':ol['order_id'],'line_id':lid,'packs':float(received),'stock_units':float(units)})
     elif mode=='new' and received and not line.get('non_stock'):raise ValueError('Match received stock to a purchase-order line, or explicitly mark the line as non-stock.')
     if oid and not lid and not line.get('non_stock'):issues.append('Stock line is not matched to the purchase order')
     if kind:issues.append(kind)
@@ -185,15 +192,17 @@ def register_invoice_scan(app,env):
     saved.append(dict(description=description,quantity=float(billed),received=float(received),unit_price=float(price),line_net=float(line_net),order_line_id=lid,non_stock=bool(line.get('non_stock')),issues=issues,note=note,resolved=not bool(issues)))
    if sum_net!=net:raise ValueError('Reviewed line net amounts do not equal invoice net. Check missing lines, discounts or charges.')
    if mode=='new' and receipts:
-    remaining=c.execute('SELECT COUNT(*) AS n FROM alport_purchase_lines WHERE order_id=%s AND received_packs<packs',(oid,)).fetchone()['n']
-    c.execute('UPDATE alport_purchase_orders SET status=%s,version=version+1 WHERE id=%s',('Part received' if remaining else 'Received',oid))
-    c.execute('INSERT INTO alport_purchase_events(order_id,event_type,actor_id,created_at,payload,request_key) VALUES(%s,%s,%s,%s,%s::jsonb,%s)',(oid,'receive',u['id'],env['now'](),json.dumps({'lines':receipts,'note':'Invoice capture '+invoice_number}),'invoice-'+key))
+    for poid in sorted({x['order_id'] for x in receipts}):
+     remaining=c.execute('SELECT COUNT(*) AS n FROM alport_purchase_lines WHERE order_id=%s AND received_packs<packs',(poid,)).fetchone()['n']
+     c.execute('UPDATE alport_purchase_orders SET status=%s,version=version+1 WHERE id=%s',('Part received' if remaining else 'Received',poid))
+     c.execute('INSERT INTO alport_purchase_events(order_id,event_type,actor_id,created_at,payload,request_key) VALUES(%s,%s,%s,%s,%s::jsonb,%s)',(poid,'receive',u['id'],env['now'](),json.dumps({'lines':[x for x in receipts if x['order_id']==poid],'note':'Invoice capture '+invoice_number}),'invoice-'+key))
    status='Review required' if any(not x['resolved'] for x in saved) else 'Awaiting approval'
    iid=c.execute('''INSERT INTO invoices(organisation_id,site_id,supplier,invoice_number,invoice_date,due_date,category,net,vat,gross,status,notes,created_at)
     VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id''',(org,sid,su['name'],invoice_number,invdate,due,text(d,'category',80) or 'Other',float(net),float(vat),float(gross),status,'Reviewed invoice scan. '+text(d,'notes'),env['now']())).fetchone()['id']
-   payload=dict(lines=saved,receipt_mode=mode,original_request=d,ocr_text=text(d,'ocr_text',100000),original_totals={'net':float(net),'vat':float(vat),'gross':float(gross)})
+   payload=dict(order_ids=oids,lines=saved,receipt_mode=mode,original_request=d,ocr_text=text(d,'ocr_text',100000),original_totals={'net':float(net),'vat':float(vat),'gross':float(gross)})
    rid=c.execute('''INSERT INTO alport_invoice_reviews(organisation_id,site_id,supplier_id,invoice_id,order_id,invoice_key,request_key,payload,created_by,created_at)
     VALUES(%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s) RETURNING id''',(org,sid,supplier,iid,oid,invoice_key,key,json.dumps(payload),u['id'],env['now']())).fetchone()['id']
+   for poid in oids:c.execute('INSERT INTO alport_invoice_order_links(review_id,order_id) VALUES(%s,%s)',(rid,poid))
    for f in attachments:c.execute('INSERT INTO alport_invoice_files(review_id,filename,mimetype,data,sha256) VALUES(%s,%s,%s,%s,%s)',(rid,*f))
    audit(c,rid,u,{'action':'Captured and reviewed','status':status,'receipt_mode':mode,'receipt_lines':receipts})
   return jsonify(id=rid,invoice_id=iid,status=status)
@@ -215,9 +224,9 @@ def register_invoice_scan(app,env):
     if line['resolved']:raise ValueError('A selected discrepancy is already resolved.')
     if action=='replacement_recorded' and line.get('order_line_id'):
      lid=line['order_line_id']
-     ol=c.execute('SELECT received_packs FROM alport_purchase_lines WHERE id=%s AND order_id=%s',(lid,r['order_id'])).fetchone()
+     ol=c.execute('SELECT l.received_packs FROM alport_purchase_lines l JOIN alport_purchase_orders p ON p.id=l.order_id WHERE l.id=%s AND p.organisation_id=%s AND p.site_id=%s',(lid,org,sid)).fetchone()
      allocated=Decimal(0)
-     for other in rows(c,'SELECT id,payload FROM alport_invoice_reviews WHERE organisation_id=%s AND site_id=%s AND order_id=%s',(org,sid,r['order_id'])):
+     for other in rows(c,'SELECT id,payload FROM alport_invoice_reviews WHERE organisation_id=%s AND site_id=%s',(org,sid)):
       data=r['payload'] if other['id']==rid else unpack(other['payload'])
       if data.get('receipt_mode') in ('existing','new'):
        for part in data['lines']:
