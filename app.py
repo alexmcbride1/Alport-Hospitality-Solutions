@@ -4094,6 +4094,9 @@ register_planning(app, globals())
 from alport_jobs import register_jobs
 register_jobs(app, globals())
 
+from alport_passkeys import register_passkeys
+register_passkeys(app, globals())
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",

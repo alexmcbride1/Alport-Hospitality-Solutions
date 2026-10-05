@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Face ID &amp; passkeys · Alport</title><link rel="icon" type="image/svg+xml" href="/static/alport-logo.svg">
+<link rel="stylesheet" href="/static/staff_portal.css"><link rel="stylesheet" href="/static/alport-passkeys.css?v=20261005">
+<script src="/static/alport-passkeys.js?v=20261005" defer></script></head>
+<body><header><img src="/static/alport-logo.svg" alt="Alport" width="155"><nav><a href="{{ back }}">Back to {{ 'company admin' if lane=='company-admin' else 'my account' }}</a></nav></header>
+<main class="passkey-settings" data-passkey-lane="{{ lane }}">
+<p class="eyebrow">Account security</p><h1>Face ID &amp; passkeys</h1><p>Signed in as <strong>{{ account }}</strong>{{ ' · Company admin' if lane=='company-admin' else '' }}</p>
+<p>Use Face ID, Touch ID, a security key or your device’s unlock method to sign in. Your device chooses the available method. Alport never receives your face scan, fingerprint or device PIN.</p>
+<p>Your password stays available. Only save a passkey to your own device or password manager, never a shared venue device. Company-admin passkeys are separate from staff and business accounts.</p>
+<p class="passkey-status" data-passkey-status role="status" aria-live="polite">Loading passkey settings…</p>
+<section><h2>Add a passkey</h2><form data-passkey-prepare>
+<label>Passkey name<input name="label" maxlength="80" required placeholder="For example: Alex’s iPhone" autocomplete="off"></label>
+<label>Current account password<input name="password" type="password" required autocomplete="current-password" maxlength="1024"></label>
+<button type="submit" disabled>Confirm password</button></form>
+<button type="button" data-passkey-create hidden>Save passkey on this device</button></section>
+<section><h2>Your saved passkeys</h2><p>Removing a passkey stops future sign-ins with it; it does not sign out an already open session. Changing your account password invalidates all its current passkeys, so add a new one afterwards.</p>
+<label>Current password to remove a passkey<input type="password" data-passkey-remove-password autocomplete="current-password" maxlength="1024"></label>
+<div data-passkey-list>Loading…</div></section>
+<p>If a device is lost, use your password on another device, then remove its passkey here. A synced passkey can exist on more than one device; removing it from Alport disables all copies of that passkey.</p>
+<noscript>Enable JavaScript to manage passkeys. Password sign-in still works.</noscript>
+</main></body></html>

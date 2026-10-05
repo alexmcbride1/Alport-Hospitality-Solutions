@@ -244,7 +244,7 @@ button:hover{
     }
 }
 </style>
-<link rel="icon" type="image/svg+xml" href="/static/alport-logo.svg"><link rel="stylesheet" href="/static/alport-ui.css?v=20261001"></head>
+<link rel="icon" type="image/svg+xml" href="/static/alport-logo.svg"><link rel="stylesheet" href="/static/alport-ui.css?v=20261001"><link rel="stylesheet" href="/static/alport-passkeys.css?v=20261005"><script src="/static/alport-passkeys.js?v=20261005" defer></script></head>
 
 <body class="alport-page page-login">
 
@@ -374,6 +374,8 @@ button:hover{
             </button>
 
         </form>
+<div class="passkey-signin" data-passkey-lane="business"><button type="button" data-passkey-login disabled>Face ID / passkey</button><p data-passkey-status role="status" aria-live="polite">Loading passkey sign-in…</p><p>First time? Sign in with your password, then open Face ID &amp; passkeys in your account to enable it.</p><noscript>Enable JavaScript to use passkeys. You can still use your password.</noscript></div>
+
 
         <a class="create" href="/onboarding">
             Create a new business
