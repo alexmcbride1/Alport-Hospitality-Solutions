@@ -3642,6 +3642,9 @@ def weather_payload(latitude, longitude, location_label="Your location"):
         "forecast_days": 7,
         "timezone": "auto"
     }
+    if os.getenv("OPEN_METEO_API_KEY"):
+        url="https://customer-api.open-meteo.com/v1/forecast"
+        params["apikey"]=os.environ["OPEN_METEO_API_KEY"]
     r = requests.get(url, params=params, timeout=10)
     r.raise_for_status()
     d = r.json()
@@ -4081,6 +4084,15 @@ register_invoice_scan(app, globals())
 from alport_staff import register_staff
 register_staff(app, globals())
 
+
+from alport_returns import register_returns
+register_returns(app, globals())
+from alport_people import register_people
+register_people(app, globals())
+from alport_planning import register_planning
+register_planning(app, globals())
+from alport_jobs import register_jobs
+register_jobs(app, globals())
 
 if __name__ == "__main__":
     app.run(
