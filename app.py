@@ -4074,6 +4074,9 @@ register_social(app, globals())
 from alport_demand import register_demand
 register_demand(app, globals())
 
+from alport_invoice_scan import register_invoice_scan
+register_invoice_scan(app, globals())
+
 
 if __name__ == "__main__":
     app.run(
