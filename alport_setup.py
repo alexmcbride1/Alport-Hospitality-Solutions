@@ -12,11 +12,11 @@ STEPS = [
  ('venue','Venue details','sites','Venue-specific reporting needs the correct site and address.'),
  ('till','Connect your till',None,'Automatic sales and tip imports need a verified till connection and a successful import.'),
  ('suppliers','Suppliers','purchasing','Purchasing needs your suppliers, contacts and payment terms.'),
- ('menu','Menu and recipes','menu','Ingredient demand requires complete recipes and explicit till-item mappings. Mapping and forecasting are a later release.'),
+ ('menu','Menu and recipes','menu','Ingredient demand requires complete recipes and explicit till-item mappings. Use Purchasing forecasts to review usage and suggested orders.'),
  ('stock','Opening stock','stock','Stock estimates need an accurate opening count and ingredient units.'),
  ('staff','Staff and payroll','staff','Payroll needs staff records, approved hours, pay rates and payroll checks.'),
  ('banking','Banking and tronc','money','Payments require verified recipients and bank authorisation. Tronc still requires allocation and manager approval.'),
- ('bookings','Bookings and demand','bookings','Bookings improve demand context. Weather, event adjustments and suggested orders are a later release.'),
+ ('bookings','Bookings and demand','bookings','Bookings improve demand context. Configure weather, events and manual sales under Sales & forecast inputs, then review Purchasing forecasts.'),
 ]
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS alport_setup_progress (
