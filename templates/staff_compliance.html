@@ -1,0 +1,60 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EHO & compliance · Alport</title><link rel="stylesheet" href="/static/staff_portal.css"><style>.view{display:block}.modal{display:none;position:fixed;inset:0;background:#102e28aa;z-index:50;align-items:center;justify-content:center;padding:15px}.modal.active{display:flex}.sheet{background:white;border-radius:16px;width:min(680px,100%);max-height:90vh;overflow:auto;padding:24px}.section{margin:20px 0}.sectionhead{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:15px}.card{background:white;border:1px solid #dce5dd;border-radius:12px;padding:16px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.kpi .value{font-size:30px;font-weight:700}.small{font-size:13px;color:#62776d}.table{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px}td,th{text-align:left;padding:10px;border-bottom:1px solid #dde6df}.form{display:grid;gap:12px}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.eho-actions{display:flex;flex-wrap:wrap;gap:10px}.metricline{display:flex;justify-content:space-between;gap:10px;padding:10px 0}.record-tags{display:flex;gap:8px;flex-wrap:wrap}.record-tags span,.pill{background:#e8f0e9;padding:5px;border-radius:5px}.eho-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.bad{color:#99360f}#toast{position:fixed;bottom:20px;left:20px;right:20px;background:#173e31;color:white;padding:16px;border-radius:12px;z-index:100}@media(max-width:650px){.grid4,.eho-summary-grid,.formgrid{grid-template-columns:1fr 1fr}.sheet{padding:15px}.eho-summary-grid{grid-template-columns:1fr}}</style></head><body><header><img src="/static/alport-logo.svg" alt="Alport" width="155"><nav><a href="/staff">My staff portal</a><a href="/logout">Sign out</a></nav></header><main><section id="eho" class="view active">
+  <div class="head eho-head">
+    <div class="eyebrow">Food safety management</div>
+    <h1>EHO Compliance</h1>
+    <p>Daily food-safety records, corrective actions and audit evidence for {{site.name}}.</p>
+  </div>
+
+  <div class="notice eho-legal">
+    <b>England compliance support.</b> Keep your site-specific HACCP/SFBB procedures current and follow any instructions from your local authority or EHO. Alport Hospitality Solutions stores supporting evidence and staff sign-off.
+  </div>
+
+  <div class="section grid4 eho-kpis">
+    <div class="card kpi"><div class="label">Today's diary</div><div class="value" id="ehoDaily">&mdash;</div><div class="small" id="ehoDailyText"></div></div>
+    <div class="card kpi"><div class="label">Temperature checks</div><div class="value" id="ehoTemps">&mdash;</div><div class="small" id="ehoTempText"></div></div>
+    <div class="card kpi"><div class="label">Open actions</div><div class="value" id="ehoActions">&mdash;</div><div class="small">Require follow-up</div></div>
+    <div class="card kpi"><div class="label">4-week review</div><div class="value" id="ehoReview">&mdash;</div><div class="small" id="ehoReviewText"></div></div>
+  </div>
+
+  <div class="section eho-actions">
+    <button class="btn primary" onclick="openEhoChecklist('Opening')">Opening checks</button>
+    <button class="btn primary" onclick="openEhoChecklist('Closing')">Closing checks</button>
+    <button class="btn" onclick="openEhoTemperature()">Record temperature</button>
+    <button class="btn" onclick="openEhoRecord()">Add compliance record</button>
+    <button class="btn" onclick="openEhoReview()">Complete 4-week review</button>
+    <button class="btn" id="ehoAuditModeBtn" onclick="openEhoAuditMode()">Open EHO audit mode</button>
+  </div>
+
+  <div class="section eho-summary-grid">
+    <div class="card">
+      <div class="sectionhead"><h2>Today's checks</h2></div>
+      <div id="ehoTodayChecks"></div>
+    </div>
+    <div class="card">
+      <div class="sectionhead"><h2>Records covered</h2></div>
+      <div class="record-tags"><span>Cleaning</span><span>Pest control</span><span>Deliveries</span><span>Allergens</span><span>Staff training</span><span>Probe calibration</span><span>Maintenance</span><span>Waste</span><span>Fit-to-work</span><span>HACCP/SFBB</span></div>
+    </div>
+  </div>
+
+<div class="section card"><div class="sectionhead"><div><h2>Staff training register</h2><div class="small">Automatically populated from Staff & Onboarding. Included in EHO Audit Mode.</div></div></div><div id="ehoTrainingSummary" class="small">Loading training evidence...</div></div>
+
+  <div class="section card">
+    <div class="sectionhead"><div><h2>Recent compliance activity</h2><div class="small">Latest food-safety records for this site</div></div><button class="btn" onclick="loadEho()">Refresh</button></div>
+    <div class="table"><table><thead><tr><th>Date</th><th>Category</th><th>Record</th><th>Status</th><th>Recorded by</th><th>Due</th><th></th></tr></thead><tbody id="ehoRecentRows"></tbody></table></div>
+  </div>
+
+  <div class="section card">
+    <div class="sectionhead"><div><h2>Temperature history</h2><div class="small">Last 28 days</div></div></div>
+    <div class="table"><table><thead><tr><th>Date/time</th><th>Type</th><th>Item</th><th>Temp</th><th>Limits</th><th>Result</th><th>By</th></tr></thead><tbody id="ehoTempRows"></tbody></table></div>
+  </div>
+</section><p class="muted">Compliance access is included for all staff at this venue. Private fit-to-work case details remain with managers. Records are signed with your own account.</p></main><div class="modal" id="ehoChecklistModal"><div class="sheet"><div class="sectionhead"><div><b id="ehoChecklistTitle">Daily checks</b><div class="small">Answer every item. Failed checks require a recorded problem and corrective action.</div></div><button class="close" onclick="closeModal('ehoChecklistModal')">&times;</button></div><form class="form" onsubmit="saveEhoChecklist(event)"><div id="ehoChecklistItems"></div><label>Problems / changes</label><textarea id="ehoProblems" rows="3" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:9px"></textarea><label>Corrective action taken</label><textarea id="ehoCorrective" rows="3" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:9px"></textarea><div class="notice">Submitting this form is your electronic sign-off that the answers are accurate to the best of your knowledge and that your site's safe methods were followed or exceptions were recorded.</div><button class="btn primary">Sign & save</button></form></div></div>
+
+<div class="modal" id="ehoTemperatureModal"><div class="sheet"><div class="sectionhead"><div><b>Record temperature</b><div class="small" id="ehoTempGuidance">Use the limit in your documented safe method.</div></div><button class="close" onclick="closeModal('ehoTemperatureModal')">&times;</button></div><form class="form" onsubmit="saveEhoTemperature(event)"><label>Check type</label><select id="ehoTempType" onchange="applyEhoTempPreset()"></select><label>Fridge / freezer / food / delivery</label><input id="ehoTempItem" required><div class="formgrid"><div><label>Temperature &deg;C</label><input id="ehoTempValue" type="number" step="0.1" required></div><div><label>Method / time held</label><input id="ehoTempMethod" placeholder="e.g. core probe, 2 minutes"></div></div><div class="formgrid"><div><label>Minimum &deg;C (if applicable)</label><input id="ehoTempMin" type="number" step="0.1"></div><div><label>Maximum &deg;C (if applicable)</label><input id="ehoTempMax" type="number" step="0.1"></div></div><label>Corrective action if outside limit</label><textarea id="ehoTempCorrective" rows="3" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:9px"></textarea><button class="btn primary">Record temperature</button></form></div></div>
+
+<div class="modal" id="ehoRecordModal"><div class="sheet"><div class="sectionhead"><div><b>Add compliance record</b><div class="small">Use this for cleaning, pests, deliveries, allergens, training, maintenance, EHO visits, documents and other evidence.</div></div><button class="close" onclick="closeModal('ehoRecordModal')">&times;</button></div><form class="form" onsubmit="saveEhoRecord(event)"><div class="formgrid"><div><label>Category</label><select id="ehoRecCategory"></select></div><div><label>Status</label><select id="ehoRecStatus"><option>Complete</option><option>Open</option><option>Action required</option><option>Overdue</option><option>Not applicable</option></select></div></div><label>Title</label><input id="ehoRecTitle" required placeholder="e.g. Weekly extraction clean"><label>Details / evidence</label><textarea id="ehoRecDetails" rows="4" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:9px"></textarea><label>Corrective action / next step</label><textarea id="ehoRecCorrective" rows="3" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:9px"></textarea><div class="formgrid"><div><label>Due / review date</label><input id="ehoRecDue" type="date"></div><div><label>Document / certificate reference</label><input id="ehoRecReference" placeholder="Filename, URL or certificate no."></div></div><button class="btn primary">Save compliance record</button></form></div></div>
+
+<div class="modal" id="ehoReviewModal"><div class="sheet"><div class="sectionhead"><div><b>4-weekly food-safety review</b><div class="small">Review the diary for persistent problems and confirm the food-safety system remains current.</div></div><button class="close" onclick="closeModal('ehoReviewModal')">&times;</button></div><form class="form" onsubmit="saveEhoReview(event)"><div class="formgrid"><div><label>Period start</label><input id="ehoReviewStart" type="date" required></div><div><label>Period end</label><input id="ehoReviewEnd" type="date" required></div></div><label>Persistent problems identified</label><textarea id="ehoReviewProblems" rows="3" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:9px"></textarea><label>Changes / improvements made</label><textarea id="ehoReviewChanges" rows="3" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:9px"></textarea><label><input id="ehoSafeMethods" type="checkbox" checked style="width:auto"> Safe methods / HACCP controls are current</label><label><input id="ehoAllergensCurrent" type="checkbox" checked style="width:auto"> Allergen information is current</label><label><input id="ehoTrainingCurrent" type="checkbox" checked style="width:auto"> Food-safety/allergen training records are current</label><button class="btn primary">Sign 4-week review</button></form></div></div>
+
+<div class="modal" id="ehoAuditModal"><div class="sheet" style="width:min(1000px,100%)"><div class="sectionhead"><div><b>EHO Audit Mode</b><div class="small">A read-only inspection view of the evidence recorded for this site.</div></div><button class="close" onclick="closeModal('ehoAuditModal')">&times;</button></div><div class="formgrid"><div><label>From</label><input id="ehoAuditStart" type="date"></div><div><label>To</label><input id="ehoAuditEnd" type="date"></div></div><div class="actions" style="margin:10px 0"><button class="btn primary" onclick="loadEhoAuditPack()">Load audit pack</button><button class="btn" onclick="printEhoAuditPack()">Print / Save PDF</button></div><div id="ehoAuditPack"></div></div></div>
+
+<div id="toast" role="status" hidden></div><script>window.STAFF_CSRF={{ csrf|tojson }};</script><script src="/static/staff_dialog.js"></script><script src="/static/staff_compliance.js" defer></script></body></html>
