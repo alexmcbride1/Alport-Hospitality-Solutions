@@ -84,6 +84,8 @@ def estimate(daily,today,horizon,bookings,weather_pct,event_pct):
 
 
 def register_demand(app,env):
+    from alport_forecast import register_forecast,get_profile,get_weather,estimate_history
+    register_forecast(app,env)
     from alport_purchasing import register_purchasing, outstanding
     from alport_supplier_rules import SCHEMA as RULE_SCHEMA
     with env['conn']() as c:c.execute(RULE_SCHEMA)
@@ -241,8 +243,17 @@ def register_demand(app,env):
         if not 1<=horizon<=14 or any(not math.isfinite(x) or x< -50 or x>200 for x in (weather,events)):raise ValueError('Use 1–14 days and adjustments between -50% and +200%.')
         note=str(d.get('note') or '').strip()[:1000]
         if (weather or events) and not note:raise ValueError('Explain your weather/event adjustment for the audit trail.')
+        profile=get_profile(q,org,sid);history_days=profile['history_days']
+        _,site=context();weather_snapshot=get_weather(q,org,sid,site)
+        weather_days={};context_warnings=[]
+        if profile['weather_enabled']:
+            if weather_snapshot and weather_snapshot['usable']:
+                if d.get('weather_location_confirmed') is not True:raise ValueError('Confirm the weather location before applying its adjustments.')
+                weather_days={x['date']:x for x in weather_snapshot['payload']['daily']}
+                if len([x for x in weather_days if today.isoformat()<=x<=(today+timedelta(days=horizon-1)).isoformat()])<horizon:context_warnings.append('Weather is unavailable for part of this period; those days have no automatic weather adjustment.')
+            else:context_warnings.append('No fresh venue weather snapshot. Automatic weather adjustments are omitted; refresh weather before relying on this suggestion.')
         with conn() as c:
-            sales,stocks,menus,recipes,maps,posted=snapshot(c,(today-timedelta(days=28)).isoformat(),(today-timedelta(days=1)).isoformat())
+            sales,stocks,menus,recipes,maps,posted=snapshot(c,(today-timedelta(days=history_days)).isoformat(),(today-timedelta(days=1)).isoformat())
         daily=defaultdict(lambda:defaultdict(float));excluded=0;observed=set()
         for row in sales:
             try:use=usage_for_sale(unpack(row['data']),{key:m for (cid,key),m in maps.items() if cid==row['connection_id']},recipes,stocks)
@@ -252,8 +263,8 @@ def register_demand(app,env):
         # A day with valid imported sales but no sales of this ingredient is an observed zero for that ingredient.
         for iid in stocks:
             for day in observed:daily[iid].setdefault(day,0)
-        bookings={x['booking_date']:int(x['covers']) for x in q("SELECT booking_date,SUM(party_size) AS covers FROM bookings WHERE organisation_id=? AND site_id=? AND status NOT IN ('Cancelled','No-show') AND booking_date BETWEEN ? AND ? GROUP BY booking_date",(org,sid,(today-timedelta(days=28)).isoformat(),(today+timedelta(days=horizon-1)).isoformat()))}
-        events_list=q('SELECT title,event_date,event_type FROM events WHERE organisation_id=? AND site_id=? AND event_date BETWEEN ? AND ? ORDER BY event_date',(org,sid,today.isoformat(),(today+timedelta(days=horizon-1)).isoformat()))
+        bookings={x['booking_date']:int(x['covers']) for x in q("SELECT booking_date,SUM(party_size) AS covers FROM bookings WHERE organisation_id=? AND site_id=? AND status NOT IN ('Cancelled','No-show') AND booking_date BETWEEN ? AND ? GROUP BY booking_date",(org,sid,(today-timedelta(days=history_days)).isoformat(),(today+timedelta(days=horizon-1)).isoformat()))}
+        events_list=q('SELECT id,title,event_date,event_type FROM events WHERE organisation_id=? AND site_id=? AND event_date BETWEEN ? AND ? ORDER BY event_date',(org,sid,today.isoformat(),(today+timedelta(days=horizon-1)).isoformat()))
         products={x['stock_item_id']:x for x in q('''SELECT p.*,s.name AS supplier_name FROM alport_supplier_products p JOIN suppliers s ON s.id=p.supplier_id
             WHERE p.organisation_id=? AND p.site_id=? AND p.preferred=TRUE AND s.active=1''',(org,sid))}
         rules={x['supplier_id']:x for x in q('SELECT * FROM alport_delivery_rules WHERE organisation_id=? AND site_id=?',(org,sid))}
@@ -264,7 +275,7 @@ def register_demand(app,env):
         clock=datetime.now(ZoneInfo('Europe/London'))
         lines=[]
         for iid,stock in stocks.items():
-            prediction=estimate(daily[iid],today,horizon,bookings,weather,events)
+            prediction=estimate_history(daily[iid],today,horizon,bookings,weather,events,profile,weather_days,events_list)
             deliveries=incoming.get(iid,[])
             incoming_units=sum(x['quantity'] for x in deliveries if x['eligible'] and x['unit']==stock['unit'])
             shortage=max(0,prediction['units']+float(stock['par_level'])-float(stock['on_hand'])-incoming_units)
@@ -279,7 +290,7 @@ def register_demand(app,env):
                     window=delivery_window(clock,rule['lead_days'],[int(x) for x in rule['delivery_days'].split(',')],policies.get(product['supplier_id']))
                     arrival=window['arrival'];warning+=' '+window['message']
                     lead=(date.fromisoformat(arrival)-today).days
-                    if lead and stock['on_hand']<prediction['units']/horizon*lead:warning+=' Stock may run out before delivery.'
+                    if lead and float(stock['on_hand'])+sum(x['quantity'] for x in deliveries if x['eligible'] and x['unit']==stock['unit'] and x['date']<arrival)<sum(x['units'] for x in prediction['daily_forecast'] if x['date']<arrival):warning+=' Stock may run out before delivery.'
                     if lead>=horizon:warning+=' Delivery falls outside this planning period.'
                 else:warning+=' Add supplier lead time and delivery days.'
             else:warning+=' Choose a preferred supplier product.'
@@ -290,7 +301,7 @@ def register_demand(app,env):
                 for offset in range(horizon):
                     day=(today+timedelta(days=offset)).isoformat()
                     balance+=sum(x['quantity'] for x in deliveries if x['eligible'] and x['date']==day and x['unit']==stock['unit'])
-                    balance-=prediction['units']/horizon
+                    balance-=prediction['daily_forecast'][offset]['units']
                     if balance<0:
                         warning+=' Stock may run short before an outstanding delivery; review timing.'
                         break
@@ -300,8 +311,13 @@ def register_demand(app,env):
             group=[x for x in lines if x['supplier_id']==supplier and x.get('packs')]
             supplier_checks.append({'supplier_id':supplier,'supplier':group[0]['supplier'],**minimum_review(group,policies.get(supplier))})
         pending=q('SELECT COUNT(*) AS n FROM alport_order_drafts WHERE organisation_id=? AND site_id=? AND status IN (?,?)',(org,sid,'Draft','Approved'),True)['n']
-        result={'supplier_checks':supplier_checks,'today':today.isoformat(),'days':horizon,'lines':lines,'bookings':bookings,'events':events_list,'weather_pct':weather,'event_pct':events,'note':note,'excluded_sales':excluded,'observed_days':len(observed),'existing_drafts':pending,
-                'method':'20% yesterday, 30% last 7 days, 50% last 28 days (observed trading days only); weekday blend where 2+ observations exist. Bookings can increase demand up to 2×. Weather/event adjustments are entered by staff, not learned automatically. Par level is a safety buffer. Unreceived quantities on placed orders due within this window reduce suggested purchases. Overdue orders and deliveries outside this window are excluded; review those exceptions before buying. Drafts and approvals are not incoming stock.'}
+        for offset in range(horizon):
+            target=today+timedelta(days=offset);key=target.isoformat()
+            closed=target.weekday() in profile['closed_weekdays']
+            if key in profile['date_overrides']:closed=profile['date_overrides'][key]=='closed'
+            if closed and bookings.get(key,0):context_warnings.append(key+': bookings exist on a day marked closed. Review opening settings.')
+        result={'profile':profile,'history_days':history_days,'weather_context':weather_snapshot if weather_days else None,'context_warnings':context_warnings,'missing_history_days':history_days-len(observed),'supplier_checks':supplier_checks,'today':today.isoformat(),'days':horizon,'lines':lines,'bookings':bookings,'events':events_list,'weather_pct':weather,'event_pct':events,'note':note,'excluded_sales':excluded,'observed_days':len(observed),'existing_drafts':pending,
+                'method':'10% yesterday, 20% last 7 days, 30% last 28 days, 40% selected longer history, reweighted when data is absent. Observed days only; weekday blend with 2+ observations. Daily bookings can increase demand up to 2×. Saved closure settings apply to future days. Staff-configured weather/event effects and manual adjustments combine within -50% to +200% per day; they are assumptions, not learned effects. Par level is a safety buffer. Unreceived quantities on placed orders due within this window reduce suggested purchases. Overdue orders and deliveries outside this window are excluded; review those exceptions before buying. Drafts and approvals are not incoming stock.'}
         result['fingerprint']=digest({k:v for k,v in result.items() if k!='existing_drafts'});return result
     @bp.post('/api/demand/forecast')
     def forecast_preview():return jsonify(forecast(request.get_json() or {}))
