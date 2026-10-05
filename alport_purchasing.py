@@ -103,6 +103,7 @@ def register_purchasing(app,env):
             c.execute('''INSERT INTO alport_purchase_lines(order_id,stock_item_id,product_id,ingredient_name,product_name,stock_unit,pack_quantity,pack_unit,units_per_pack,pack_price,packs)
                 VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',(oid,p['stock_item_id'],p['id'],p['ingredient_name'],p['product_name'],p['stock_unit'],float(p['pack_quantity']),p['pack_unit'],float(units),float(p['pack_price']),float(packs)))
         event(c,oid,'Created',u,{'source_draft_id':source});return oid
+    app.extensions['alport_purchase_create']=create
     @bp.before_request
     def protect():
         if not env['user']():return jsonify(error='Sign in first.'),401
