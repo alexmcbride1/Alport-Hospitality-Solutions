@@ -1705,6 +1705,27 @@ def public_support():
     return redirect(url_for("public_home", support="sent") + "#support")
 
 
+@app.get("/user-guide")
+@login_required
+def user_guide():
+    response = app.make_response(render_template("user_guide.html"))
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@app.get("/user-guide/download")
+@login_required
+def user_guide_download():
+    from flask import send_file
+    response = send_file(
+        os.path.join(app.root_path, "private_docs", "Alport-Website-User-Guide.pdf"),
+        mimetype="application/pdf", as_attachment=True,
+        download_name="Alport-Website-User-Guide.pdf", max_age=0,
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
 @app.get("/app")
 @login_required
 def app_home():
@@ -4110,3 +4131,4 @@ if __name__ == "__main__":
 # Private role-aware assistant and guided launch workspace.
 from alport_assistant import register_assistant
 register_assistant(app, globals())
+
