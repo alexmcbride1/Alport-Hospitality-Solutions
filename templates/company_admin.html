@@ -1507,28 +1507,22 @@ async function openCustomer(id){
         </div>
     `;
 
-    cmSites.innerHTML =
-        d.sites
-        .map(
-            s => `
-                <div class="metricline">
-
-                    <span>
-                        ${esc(s.name)}
-                    </span>
-
-                    <span>
-                        ${
-                            s.active
-                            ? 'Active'
-                            : 'Inactive'
-                        }
-                    </span>
-
-                </div>
-            `
-        )
-        .join('');
+    const previewOwners = d.users.filter(u => u.active && u.role === 'Owner');
+    cmSites.innerHTML = d.sites.map(s => `
+        <div class="metricline"><span>${esc(s.name)}</span><span>${s.active ? 'Active' : 'Inactive'}</span></div>
+        ${s.active ? `<form method="post" action="/company-admin/venue-preview" style="margin:12px 0 24px">
+            <input type="hidden" name="csrf" value="{{ hq_preview_csrf }}">
+            <input type="hidden" name="organisation_id" value="${Number(c.id)}">
+            <input type="hidden" name="site_id" value="${Number(s.id)}">
+            <label for="previewOwner${Number(s.id)}">Owner account for ${esc(c.name)} / ${esc(s.name)}</label>
+            <select id="previewOwner${Number(s.id)}" name="user_id" required>
+                <option value="">Choose the owner account</option>
+                ${previewOwners.map(u => `<option value="${Number(u.id)}">${esc(u.name)} — ${esc(u.email)}</option>`).join('')}
+            </select>
+            <p class="small">Opens this live venue as the selected owner. Actions can change real business data. Access is recorded in the HQ audit log; subscription and payment status stay unchanged. Signing out ends preview access.</p>
+            <button class="btn" type="submit" ${previewOwners.length ? '' : 'disabled'}>Open venue preview</button>
+        </form>` : ''}
+    `).join('');
 
     cmUsers.innerHTML =
         d.users

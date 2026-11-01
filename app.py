@@ -4286,6 +4286,9 @@ register_booking_diary(app, globals())
 from alport_public_bookings import register_public_bookings
 register_public_bookings(app, globals())
 
+from alport_hq_preview import register_hq_preview
+register_hq_preview(app, globals())
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
