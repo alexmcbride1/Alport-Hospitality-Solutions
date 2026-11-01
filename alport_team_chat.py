@@ -1,5 +1,5 @@
 """Shared team rooms with explicit organisation and site boundaries."""
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 import hmac
 import re
@@ -24,6 +24,22 @@ CREATE INDEX IF NOT EXISTS alport_chat_send_rate ON alport_chat_messages(organis
 CREATE TABLE IF NOT EXISTS alport_chat_access_events(
  id BIGSERIAL PRIMARY KEY, organisation_id BIGINT NOT NULL, site_id BIGINT NOT NULL,
  user_id BIGINT NOT NULL, actor_id BIGINT NOT NULL, enabled INTEGER NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS alport_chat_reads(
+ organisation_id BIGINT NOT NULL,site_id BIGINT NOT NULL,user_id BIGINT NOT NULL,last_id BIGINT NOT NULL,
+ PRIMARY KEY(organisation_id,site_id,user_id));
+CREATE TABLE IF NOT EXISTS alport_chat_mentions(
+ message_id BIGINT NOT NULL REFERENCES alport_chat_messages(id),user_id BIGINT NOT NULL,
+ PRIMARY KEY(message_id,user_id));
+CREATE TABLE IF NOT EXISTS alport_chat_tasks(
+ id BIGSERIAL PRIMARY KEY,organisation_id BIGINT NOT NULL,site_id BIGINT NOT NULL,
+ message_id BIGINT NOT NULL REFERENCES alport_chat_messages(id),title TEXT NOT NULL,
+ assignee_id BIGINT NOT NULL REFERENCES users(id),due_date TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'Open',
+ created_by BIGINT NOT NULL,created_at TEXT NOT NULL,updated_by BIGINT NOT NULL,updated_at TEXT NOT NULL,
+ version INTEGER NOT NULL DEFAULT 1,UNIQUE(organisation_id,site_id,message_id));
+CREATE TABLE IF NOT EXISTS alport_chat_task_events(
+ id BIGSERIAL PRIMARY KEY,task_id BIGINT NOT NULL REFERENCES alport_chat_tasks(id),
+ actor_id BIGINT NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL);
+
 '''
 
 
@@ -143,6 +159,8 @@ def register_team_chat(app, env):
         rows = rows[:50]
         if after is None:
             rows.reverse()
+        for row in rows:
+            row['mentions'] = q('SELECT u.name FROM alport_chat_mentions x JOIN users u ON u.id=x.user_id WHERE x.message_id=? ORDER BY u.name',(row['id'],))
         return jsonify(site=site, messages=rows, has_more=more)
 
     @bp.post('/api/team-chat/sites/<int:site_id>/messages')
@@ -152,6 +170,10 @@ def register_team_chat(app, env):
         if not isinstance(body, str) or not body.strip() or len(body.strip()) > 2000:
             raise ValueError('Write a message of 1 to 2,000 characters.')
         body = body.strip()
+        mentions = data.get('mentions', [])
+        if not isinstance(mentions, list) or len(mentions)>20 or any(type(i) is not int for i in mentions):
+            raise ValueError('Choose up to 20 people to mention.')
+        mentions = sorted(set(mentions))
         if any(ord(ch) < 32 and ch not in '\n\t' for ch in body):
             raise ValueError('Remove control characters from your message.')
         if not isinstance(key, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,80}', key):
@@ -161,10 +183,12 @@ def register_team_chat(app, env):
             # retries and the shared database rate limit safe across web workers.
             c.execute('SELECT pg_advisory_xact_lock(%s)', (741000000000 + g.chat_user['organisation_id'],))
             u, site = room(site_id, c)
+            permitted = {p['id'] for p in participants(u,site_id,c)}
+            if not set(mentions).issubset(permitted): raise ValueError('A mentioned person no longer has access to this site.')
             args = (u['organisation_id'], site_id, u['id'], key)
             old = c.execute('SELECT id,body FROM alport_chat_messages WHERE organisation_id=%s AND site_id=%s AND user_id=%s AND request_key=%s', args).fetchone()
             if old:
-                if old['body'] != body:
+                if old['body'] != body or mentions != sorted(r['user_id'] for r in c.execute('SELECT user_id FROM alport_chat_mentions WHERE message_id=%s',(old['id'],)).fetchall()):
                     return jsonify(error='This send attempt belongs to a different message.'), 409
                 return jsonify(id=old['id'], duplicate=True)
             since = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(timespec='microseconds')
@@ -173,6 +197,8 @@ def register_team_chat(app, env):
                 return jsonify(error='Please wait a minute before sending more messages.'), 429, {'Retry-After': '60'}
             row = c.execute('''INSERT INTO alport_chat_messages(organisation_id,site_id,user_id,sender_name,body,request_key,created_at)
                 VALUES(%s,%s,%s,%s,%s,%s,%s) RETURNING id''', (u['organisation_id'], site_id, u['id'], u['name'], body, key, stamp())).fetchone()
+            for uid in mentions:
+                c.execute('INSERT INTO alport_chat_mentions(message_id,user_id) VALUES(%s,%s)',(row['id'],uid))
         return jsonify(id=row['id']), 201
 
     def require_owner(site_id, c=None):
@@ -219,5 +245,87 @@ def register_team_chat(app, env):
                 c.execute('DELETE FROM alport_chat_members WHERE organisation_id=%s AND site_id=%s AND user_id=%s', (u['organisation_id'], site_id, target))
             c.execute('INSERT INTO alport_chat_access_events(organisation_id,site_id,user_id,actor_id,enabled,created_at) VALUES(%s,%s,%s,%s,%s,%s)', (u['organisation_id'], site_id, target, u['id'], int(enabled), stamp()))
         return jsonify(ok=True)
+
+    def participants(u, site_id, c=None):
+        users = query(c, 'SELECT id,name,role,organisation_id FROM users WHERE organisation_id=%s AND active=1 ORDER BY name,id',(u['organisation_id'],))
+        return [{'id':p['id'],'name':p['name']} for p in users if any(s['id']==site_id for s in available(p,c))]
+
+    @bp.get('/api/team-chat/sites/<int:site_id>/participants')
+    def people(site_id):
+        u,site=room(site_id)
+        return jsonify(users=participants(u,site_id))
+
+    @bp.get('/api/team-chat/unread')
+    def unread():
+        u=g.chat_user; result=[]
+        for site in available(u):
+            last=q('SELECT last_id FROM alport_chat_reads WHERE organisation_id=? AND site_id=? AND user_id=?',(u['organisation_id'],site['id'],u['id']),True)
+            last=last['last_id'] if last else 0
+            row=q("""SELECT COUNT(*) AS unread FROM alport_chat_messages
+                WHERE organisation_id=? AND site_id=? AND id>? AND user_id<>?""",(u['organisation_id'],site['id'],last,u['id']),True)
+            mentioned=q("""SELECT COUNT(*) AS mentions FROM alport_chat_mentions x JOIN alport_chat_messages m ON m.id=x.message_id
+                WHERE m.organisation_id=? AND m.site_id=? AND m.id>? AND x.user_id=? AND m.user_id<>?""",(u['organisation_id'],site['id'],last,u['id'],u['id']),True)
+            result.append({**site,**row,**mentioned})
+        return jsonify(sites=result)
+
+    @bp.post('/api/team-chat/sites/<int:site_id>/read')
+    def mark_read(site_id):
+        last=request.get_json().get('last_id')
+        if type(last) is not int or not 0<=last<=9223372036854775807: raise ValueError('Invalid message position.')
+        with conn() as c:
+            u,site=room(site_id,c)
+            if last and not c.execute('SELECT id FROM alport_chat_messages WHERE id=%s AND organisation_id=%s AND site_id=%s',(last,u['organisation_id'],site_id)).fetchone():
+                raise ValueError('Message does not belong to this site.')
+            c.execute("""INSERT INTO alport_chat_reads(organisation_id,site_id,user_id,last_id) VALUES(%s,%s,%s,%s)
+                ON CONFLICT(organisation_id,site_id,user_id) DO UPDATE SET last_id=CASE WHEN excluded.last_id>alport_chat_reads.last_id THEN excluded.last_id ELSE alport_chat_reads.last_id END""",(u['organisation_id'],site_id,u['id'],last))
+        return jsonify(ok=True)
+
+    @bp.get('/api/team-chat/sites/<int:site_id>/tasks')
+    def tasks(site_id):
+        u,site=room(site_id)
+        rows=q("""SELECT t.*,u.name AS assignee,a.name AS updated_name FROM alport_chat_tasks t
+            JOIN users u ON u.id=t.assignee_id JOIN users a ON a.id=t.updated_by
+            WHERE t.organisation_id=? AND t.site_id=? ORDER BY CASE WHEN t.status='Done' THEN 1 ELSE 0 END,t.due_date,t.id DESC LIMIT 200""",(u['organisation_id'],site_id))
+        return jsonify(tasks=rows)
+
+    @bp.post('/api/team-chat/sites/<int:site_id>/tasks')
+    def create_task(site_id):
+        d=request.get_json();mid=d.get('message_id');uid=d.get('assignee_id');title=d.get('title');due=d.get('due_date')
+        if type(mid) is not int or type(uid) is not int or not isinstance(title,str) or not 1<=len(title.strip())<=200:
+            raise ValueError('Choose a message, assignee and title of up to 200 characters.')
+        try: date.fromisoformat(due)
+        except (TypeError,ValueError): raise ValueError('Choose a valid deadline.')
+        with conn() as c:
+            c.execute('SELECT pg_advisory_xact_lock(%s)',(741000000000+g.chat_user['organisation_id'],))
+            u,site=room(site_id,c)
+            if not c.execute('SELECT id FROM alport_chat_messages WHERE id=%s AND organisation_id=%s AND site_id=%s',(mid,u['organisation_id'],site_id)).fetchone(): raise ValueError('Message not found in this room.')
+            if uid not in {p['id'] for p in participants(u,site_id,c)}: raise ValueError('Choose someone with access to this room.')
+            old=c.execute('SELECT id FROM alport_chat_tasks WHERE organisation_id=%s AND site_id=%s AND message_id=%s',(u['organisation_id'],site_id,mid)).fetchone()
+            if old:return jsonify(error='This message already has a task.'),409
+            row=c.execute("""INSERT INTO alport_chat_tasks(organisation_id,site_id,message_id,title,assignee_id,due_date,created_by,created_at,updated_by,updated_at)
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",(u['organisation_id'],site_id,mid,title.strip(),uid,due,u['id'],stamp(),u['id'],stamp())).fetchone()
+            c.execute('INSERT INTO alport_chat_task_events(task_id,actor_id,status,created_at) VALUES(%s,%s,%s,%s)',(row['id'],u['id'],'Open',stamp()))
+        return jsonify(id=row['id']),201
+
+    @bp.post('/api/team-chat/sites/<int:site_id>/tasks/<int:tid>')
+    def update_task(site_id,tid):
+        d=request.get_json();status=d.get('status');version=d.get('version')
+        if status not in ('Open','In progress','Done') or type(version) is not int: raise ValueError('Choose a valid task status.')
+        with conn() as c:
+            c.execute('SELECT pg_advisory_xact_lock(%s)',(741000000000+g.chat_user['organisation_id'],))
+            u,site=room(site_id,c)
+            task=c.execute('SELECT * FROM alport_chat_tasks WHERE id=%s AND organisation_id=%s AND site_id=%s',(tid,u['organisation_id'],site_id)).fetchone()
+            if not task:raise PermissionError('Task not found in this site.')
+            if u['role']!='Owner' and u['id'] not in (task['assignee_id'],task['created_by']): raise PermissionError('Only the assignee, creator or Owner can update this task.')
+            changed=c.execute('UPDATE alport_chat_tasks SET status=%s,updated_by=%s,updated_at=%s,version=version+1 WHERE id=%s AND version=%s RETURNING id',(status,u['id'],stamp(),tid,version)).fetchone()
+            if not changed:return jsonify(error='Task changed. Refresh before updating.'),409
+            c.execute('INSERT INTO alport_chat_task_events(task_id,actor_id,status,created_at) VALUES(%s,%s,%s,%s)',(tid,u['id'],status,stamp()))
+        return jsonify(ok=True)
+
+    @bp.get('/api/team-chat/sites/<int:site_id>/tasks/<int:tid>/history')
+    def task_history(site_id,tid):
+        u,site=room(site_id)
+        if not q('SELECT id FROM alport_chat_tasks WHERE id=? AND organisation_id=? AND site_id=?',(tid,u['organisation_id'],site_id),True):raise PermissionError('Task not found in this site.')
+        return jsonify(events=q('SELECT e.status,e.created_at,u.name AS actor FROM alport_chat_task_events e JOIN users u ON u.id=e.actor_id WHERE e.task_id=? ORDER BY e.id DESC',(tid,)))
 
     app.register_blueprint(bp)

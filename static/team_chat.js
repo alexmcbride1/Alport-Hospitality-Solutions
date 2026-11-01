@@ -25,7 +25,7 @@
     }
     function clearPrivateContent() {
         state.rows.clear(); $('chatMessages').replaceChildren(); $('accessUsers').replaceChildren();
-        $('chatBody').value = ''; state.drafts.clear(); state.attempts.clear();
+        $('chatBody').value = ''; $('chatTasks').replaceChildren(); $('chatMentions').replaceChildren(); $('taskForm').hidden=true; state.drafts.clear(); state.attempts.clear();
         $('chatRoom').hidden = true; controls(false);
     }
     function failure(error) {
@@ -45,7 +45,11 @@
         const time = document.createElement('time'); time.dateTime = row.created_at;
         time.textContent = new Date(row.created_at).toLocaleString(undefined, {dateStyle:'medium',timeStyle:'short'});
         const body = document.createElement('p'); body.textContent = row.body;
-        heading.append(name,time); article.append(heading,body); return article;
+        heading.append(name,time); article.append(heading,body);
+        if(row.mentions?.length){const mentions=document.createElement('small');mentions.textContent='Mentions: '+row.mentions.map(p=>'@'+p.name).join(', ');article.append(mentions);}
+        const task=document.createElement('button');task.type='button';task.textContent='Create task';
+        task.addEventListener('click',()=>{ $('taskMessage').textContent=row.id; $('taskTitle').value=row.body.slice(0,200); $('taskStatus').textContent=''; $('taskForm').hidden=false; $('taskTitle').focus(); });
+        article.append(task); return article;
     }
     function render(rows, mode) {
         const log = $('chatMessages'), nearBottom = log.scrollHeight-log.scrollTop-log.clientHeight < 90;
@@ -83,6 +87,10 @@
             if (generation!==state.generation) return;
             render(data.messages,initial?'initial':'new');state.loaded=true;
             if(initial) $('olderMessages').hidden=!data.has_more;
+            if(!document.hidden && !data.has_more && $('chatMessages').scrollHeight-$('chatMessages').scrollTop-$('chatMessages').clientHeight<90 && state.latest) await api('/sites/'+site+'/read',{last_id:state.latest},state.controller.signal);
+            if(generation!==state.generation)return;
+            if(!$('chatTasks').contains(document.activeElement))await loadTasks();await unread();
+            if(generation!==state.generation)return;
             controls(true);status('Connected to '+data.site.name+'. Messages refresh automatically.');
             schedule(!initial && data.has_more ? 100 : 5000);
         } catch(error) {
@@ -94,13 +102,17 @@
         clearTimeout(state.timer);state.controller?.abort();state.controller=new AbortController();
         state.generation++;state.loaded=false;state.busy=false;state.rows.clear();state.latest=0;state.oldest=0;
         state.site=$('chatSite').value||null;
-        $('chatMessages').replaceChildren();$('accessUsers').replaceChildren();$('chatAccess').open=false;
+        $('chatMessages').replaceChildren();$('accessUsers').replaceChildren();$('chatTasks').replaceChildren();$('chatMentions').replaceChildren();$('taskAssignee').replaceChildren();$('taskForm').hidden=true;$('chatAccess').open=false;
         $('chatBody').value=state.drafts.get(state.site)||'';$('newMessages').hidden=true;$('olderMessages').hidden=true;
         $('chatRoom').hidden=!state.site;$('sendStatus').textContent='';controls(false);
         if(!state.site){status('Choose a site to open its chat.');return;}
         const name=state.config.sites.find(site=>String(site.id)===state.site).name;
         $('roomName').textContent=name;$('recipientSite').textContent=name;
         $('chatAccess').hidden=!state.config.owner;status('Loading '+name+'…');
+        const gen=state.generation;
+        try {const people=await api('/sites/'+state.site+'/participants',null,state.controller.signal);if(gen!==state.generation)return;
+            for(const person of people.users){$('taskAssignee').append(new Option(person.name,person.id));$('chatMentions').append(new Option(person.name,person.id));}
+        }catch(error){if(gen===state.generation)failure(error);return;}
         await refresh(true);
     }
     $('chatSite').addEventListener('change',chooseSite);
@@ -119,15 +131,15 @@
     });
     $('chatForm').addEventListener('submit',async event=>{
         event.preventDefault();if(!state.site||!state.ready||state.sending)return;
-        const body=$('chatBody').value.trim();if(!body)return;
+        const body=$('chatBody').value.trim();if(!body)return;const mentions=Array.from($('chatMentions').selectedOptions,x=>Number(x.value));
         const site=state.site,generation=state.generation;
         let attempt=state.attempts.get(site);
-        if(!attempt||attempt.body!==body){attempt={body,request_key:crypto.randomUUID()};state.attempts.set(site,attempt);}
+        if(!attempt||attempt.body!==body||JSON.stringify(attempt.mentions)!==JSON.stringify(mentions)){attempt={body,mentions,request_key:crypto.randomUUID()};state.attempts.set(site,attempt);}
         state.sending=true;controls(false);$('sendStatus').textContent='Sending to '+$('roomName').textContent+'…';
         try {
             await api('/sites/'+site+'/messages',attempt,state.controller.signal);
             if(generation!==state.generation)return;
-            $('chatBody').value='';state.drafts.delete(site);state.attempts.delete(site);$('sendStatus').textContent='Message sent.';
+            $('chatBody').value='';for(const o of $('chatMentions').options)o.selected=false;state.drafts.delete(site);state.attempts.delete(site);$('sendStatus').textContent='Message sent.';
         } catch(error){if(generation===state.generation){$('sendStatus').textContent='Send not confirmed. '+error.message+' Retry the same message to avoid duplicates.';failure(error);}}
         finally {
             state.sending=false;
@@ -163,13 +175,44 @@
     document.addEventListener('visibilitychange',()=>{clearTimeout(state.timer);if(!document.hidden&&state.site)refresh();});
     window.addEventListener('pagehide',()=>{clearTimeout(state.timer);state.controller?.abort();state.generation++;clearPrivateContent();});
     window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
+    async function unread(){
+        const gen=state.generation;const d=await api('/unread');if(gen!==state.generation)return;
+        $('chatUnread').textContent=d.sites.map(s=>s.name+': '+s.unread+' unread'+(s.mentions?' · '+s.mentions+' mentions':'')).join(' | ');
+        for(const o of $('chatSite').options){const s=d.sites.find(x=>String(x.id)===o.value);if(s)o.textContent=s.name+(s.unread?' ('+s.unread+' unread)':'');}
+    }
+    async function loadTasks(){
+        const gen=state.generation,site=state.site;if(!site)return;
+        const d=await api('/sites/'+site+'/tasks',null,state.controller.signal);if(gen!==state.generation)return;
+        $('chatTasks').replaceChildren();
+        for(const task of d.tasks){const box=document.createElement('article');box.className='task-card';
+            const title=document.createElement('h3');title.textContent=task.title;
+            const detail=document.createElement('p');detail.textContent=task.assignee+' · Due '+task.due_date+' · '+task.status;
+            const audit=document.createElement('small');audit.textContent='Last updated by '+task.updated_name+' · '+new Date(task.updated_at).toLocaleString();box.append(title,detail,audit);
+            if(state.config.owner||[task.assignee_id,task.created_by].includes(state.config.user.id)){
+                const select=document.createElement('select');select.setAttribute('aria-label','Status for '+task.title);
+                for(const status of ['Open','In progress','Done'])select.append(new Option(status,status));select.value=task.status;
+                select.addEventListener('change',async()=>{select.disabled=true;try{await api('/sites/'+site+'/tasks/'+task.id,{status:select.value,version:task.version},state.controller.signal);if(gen===state.generation)await loadTasks();}catch(e){if(gen===state.generation){if(e.status===401||e.status===403)failure(e);else{status(e.message);await loadTasks();}}}});box.append(select);
+            }
+            const history=document.createElement('button');history.type='button';history.textContent='Task history';
+            history.addEventListener('click',async()=>{try{const h=await api('/sites/'+site+'/tasks/'+task.id+'/history',null,state.controller.signal);if(gen!==state.generation)return;const list=document.createElement('ul');for(const event of h.events){const li=document.createElement('li');li.textContent=event.actor+' · '+event.status+' · '+new Date(event.created_at).toLocaleString();list.append(li);}history.replaceWith(list);}catch(e){if(gen===state.generation)status(e.message);}});box.append(history);$('chatTasks').append(box);
+        }
+        if(!d.tasks.length)$('chatTasks').textContent='No tasks yet.';
+    }
+    $('cancelTask').addEventListener('click',()=>{$('taskForm').hidden=true;});
+    $('taskForm').addEventListener('submit',async e=>{e.preventDefault();const site=state.site,gen=state.generation;const button=e.submitter;button.disabled=true;
+        try{await api('/sites/'+site+'/tasks',{message_id:Number($('taskMessage').textContent),title:$('taskTitle').value,assignee_id:Number($('taskAssignee').value),due_date:$('taskDue').value},state.controller.signal);if(gen===state.generation){$('taskForm').hidden=true;await loadTasks();status('Task created.');}}
+        catch(error){if(gen===state.generation)$('taskStatus').textContent=error.message;}finally{button.disabled=false;}
+    });
     async function init(){
         try{
             state.config=await api('/config');$('chatSite').replaceChildren(new Option('Choose a site…',''));
             for(const site of state.config.sites)$('chatSite').append(new Option(site.name,site.id));
             $('chatSite').disabled=!state.config.sites.length;
+            await unread();const selected=new URLSearchParams(location.search).get('site');if(selected&&state.config.sites.some(s=>String(s.id)===selected)){$('chatSite').value=selected;await chooseSite();return;}
             status(state.config.sites.length?'Choose a site to open its chat.':'No site chat access yet. Ask your Owner to assign you to a site.');
         }catch(error){failure(error);}
     }
+    const unreadTimer=setInterval(()=>{if(!document.hidden&&!state.site&&state.config)unread().catch(e=>status(e.message));},15000);
+    window.addEventListener('pagehide',()=>{clearInterval(unreadTimer);$('chatUnread').textContent='';});
     init();
 })();
