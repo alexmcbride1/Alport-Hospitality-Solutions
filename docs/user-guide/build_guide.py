@@ -31,7 +31,7 @@ def page(n,title,sub):
  c.setFillColor(D); c.setFont('Helvetica-Bold',25); c.drawString(46,H-140,title)
  text(sub,46,H-156,size=10,color=MUT)
  c.setStrokeColor(GOLD); c.line(46,43,549,43)
- c.setFont('Helvetica',8); c.setFillColor(MUT); c.drawString(46,29,'ALPORT HOSPITALITY SOLUTIONS  |  USER GUIDE  |  NOVEMBER 2026  |  REVISION 2'); c.drawRightString(549,29,str(n))
+ c.setFont('Helvetica',8); c.setFillColor(MUT); c.drawString(46,29,'ALPORT HOSPITALITY SOLUTIONS  |  USER GUIDE  |  NOVEMBER 2026  |  REVISION 3'); c.drawRightString(549,29,str(n))
 
 def item(num,title,body,y):
  c.setFillColor(G); c.circle(58,y-10,11,fill=1,stroke=0); c.setFillColor(white); c.setFont('Helvetica-Bold',10); c.drawCentredString(58,y-14,str(num))
@@ -58,7 +58,7 @@ flow(['Sign in','Check your venue','Choose a task','Review & save'],y-38)
 y=y-130
 for n,title,body in [(2,'Find your way around','Desktop navigation, mobile navigation and a map of the workspace.'),(3,'Bookings & guests','Choose a date, use the diary and add a booking.'),(4,'Stock & purchasing','Understand stock levels and complete a stocktake.'),(5,'People & rota','Find staff tools and plan a shift.'),(6,'EHO Compliance','Find daily checks, records and audit evidence.'),(7,'Finance, setup & help','Choose the right finance screen and troubleshoot common issues.'),(8,'Team chat','Choose a site room, read its history and share an update.')]:
  y=text(f'<b>{n} / {title}</b> &nbsp; {body}',46,y,503,11)-16
-text('Refreshed 1 November 2026 after the navigation and Team chat updates. Screenshots show empty workspace records. Your data and available actions may differ. Revision 2.',46,115,503,9,MUT)
+text('Refreshed 1 November 2026 after the navigation and Team chat updates. Screenshots show empty workspace records. Your data and available actions may differ. Revision 3.',46,115,503,9,MUT)
 c.showPage()
 page(2,'Find your way around','Start by checking the organisation and venue shown beside the Alport logo.')
 y=shot('navigation')
@@ -89,7 +89,7 @@ y=item(1,'Choose the right people tool','Staff contains employee records. Staff 
 y=item(2,'Plan a shift','Open Shifts & Rota and select + Add shift. Choose the employee and date, enter start and finish times, and record the break in minutes. Select Save shift.',y)
 y=item(3,'Review the rota','Check the date, employee, hours, rate and estimated cost in the table. Review booking demand alongside the rota when it is available.',y)
 flow(['Staff records','Shifts & breaks','Review labour','Payroll'],y-6)
-text('<b>Before payroll:</b> Check hours and breaks with the responsible manager. Planning a shift is separate from reviewing attendance and completing payroll.',46,y-80,503,11)
+text('<b>New starters:</b> Add &amp; invite employee assigns six modules: Food Hygiene, Allergen Safety, HACCP/SFBB, Workplace Safety, Fire Safety and Equality &amp; Discrimination. Each has five questions and an 80% pass mark. Check completion in Staff &amp; Onboarding; rota creation does not enforce completion.',46,y-80,503,9)
 c.showPage()
 page(6,'EHO Compliance','Select EHO Compliance from the sidebar, or from More on mobile.')
 y=shot('compliance')
