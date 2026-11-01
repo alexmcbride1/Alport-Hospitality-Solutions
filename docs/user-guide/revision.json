@@ -1,16 +1,20 @@
 {
-  "revision": 3,
-  "captured_at": "2026-11-01T13:42:00Z",
-  "deployed_commit": "17b0bdc2fd560a79df0a0111d62364fa7555a100",
-  "page_count": 8,
+  "revision": 4,
+  "captured_at": "2026-11-01T14:25:00Z",
+  "deployed_commit": "7f1f4a5aa5ce818b52942d11aad96f7ab33da371",
+  "page_count": 18,
   "live_url": "https://alporthospitality.co.uk/user-guide",
   "changes": [
-    "Fresh screenshots",
-    "Branded workspace navigation and mobile dropdown",
-    "Compliance evidence links",
-    "Team chat instructions"
+    "Today at my site and finance/source warnings",
+    "Setup, owner overview and accountability",
+    "Chat unread mentions and tasks",
+    "All seven pub operations workflows",
+    "Public product tour",
+    "Six onboarding modules preserved"
   ],
-  "pending": "Further dashboard, comparisons, owner overview, chat tasks, mobile navigation and walkthrough PR work is not covered until deployed.",
+  "pending": "None for this deployed feature release; later changes need a new guide review.",
   "training_deployed_commit": "374fbee8e0fc69116306da4393d47b7a0a3a98d8",
-  "training_update": "Six onboarding modules; existing screenshots remain accurate. No new production employee record or invitation created."
+  "training_update": "Six onboarding modules; existing screenshots remain accurate. No new production employee record or invitation created.",
+  "pending_features": [],
+  "notes": "Live empty-site captures for Today, pub operations, chat and public tour. Earlier unchanged booking/stock/rota/EHO captures retained. Training remains six modules."
 }
