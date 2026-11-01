@@ -1,4 +1,5 @@
 """Optional WebAuthn sign-in. No biometric data or private keys reach Alport."""
+from alport_access import preview_session_values
 import hashlib
 import hmac
 import json
@@ -353,7 +354,9 @@ def register_passkeys(app, env):
                                      (u['organisation_id'],)).fetchone()
                     if site:
                         values['site_id'] = site['id']
-                    destination = '/subscribe' if sub and sub.get('status') == 'Payment required' else '/app'
+                    preview = preview_session_values(session, u)
+                    values.update(preview)
+                    destination = '/subscribe' if sub and sub.get('status') == 'Payment required' and not preview else '/app'
             c.execute('UPDATE alport_passkeys SET sign_count=%s,last_used=%s WHERE id=%s',
                       (verified.new_sign_count, now(), row['id']))
             event(c, p['subject'], 'Signed in', row['id'])
