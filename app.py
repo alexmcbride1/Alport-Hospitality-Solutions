@@ -89,7 +89,7 @@ def now():
 # -----------------------------------------------------------------------------
 # ALPORT SaaS PRICING / STRIPE BILLING
 # -----------------------------------------------------------------------------
-BASE_PRICE_PER_SITE = 500.0
+BASE_PRICE_PER_SITE = 1000.0
 INCLUDED_USERS_PER_SITE = 0  # users are unlimited and included
 EXTRA_USER_PRICE = 0.0
 VAT_RATE = 0.20
@@ -129,8 +129,8 @@ def pricing_for(organisation_id, preserve_commitment=True):
     active_sites = max(1, int((sites_row or {}).get("n") or 0))
     active_users = max(0, int((users_row or {}).get("n") or 0))
 
-    # Alport is £500 + VAT per active/contracted venue per month. Users are unlimited.
-    base = BASE_PRICE_PER_SITE
+    # Alport is £1,000 + VAT per active/contracted venue per month. Users are unlimited.
+    base = float(sub["base_price"]) if sub and sub.get("contract_start") and sub.get("base_price") else BASE_PRICE_PER_SITE
     vat_rate = VAT_RATE
     committed_sites = int((sub or {}).get("contracted_sites") or active_sites)
     contract_end = _parse_iso_date((sub or {}).get("contract_end"))
@@ -199,14 +199,29 @@ def verify_stripe_signature(payload, signature_header, secret, tolerance=300):
     return any(hmac.compare_digest(expected, sig) for sig in pieces.get("v1", []))
 
 
+def validate_subscription_price(price, net_per_site):
+    recurring = price.get("recurring") or {}
+    expected = int(round(net_per_site * (1 + VAT_RATE) * 100))
+    if not (
+        price.get("active") and price.get("currency") == "gbp"
+        and price.get("unit_amount") == expected
+        and price.get("billing_scheme") == "per_unit"
+        and not price.get("transform_quantity")
+        and recurring.get("interval") == "month"
+        and recurring.get("interval_count") == 1
+        and recurring.get("usage_type") == "licensed"
+    ):
+        raise RuntimeError("Subscription checkout is being updated. Please contact Alport support before paying.")
+
+
 def record_stripe_payment(organisation_id, invoice):
     invoice_id = str(invoice.get("id") or "")
     if invoice_id and q("SELECT id FROM subscription_payments WHERE stripe_invoice_id=?", (invoice_id,), True):
         return
     total_pence = int(invoice.get("amount_paid") or invoice.get("total") or 0)
     gross = round(total_pence / 100.0, 2)
-    # Stripe base price is VAT-inclusive gross (£600 per venue/month).
-    # Commercial pricing is £500 + 20% VAT per venue/month.
+    # Stripe base price is VAT-inclusive gross (£1,200 per venue/month).
+    # Commercial pricing is £1,000 + 20% VAT per venue/month.
     net = round(gross / (1 + VAT_RATE), 2) if gross else 0
     vat = round(gross - net, 2)
     paid_at = date.today().isoformat()
@@ -984,7 +999,7 @@ def init_db():
             # SaaS billing / 12-month contract fields. ADD COLUMN IF NOT EXISTS
             # keeps existing Render databases safe during deployment.
             migrations = [
-                "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS base_price DOUBLE PRECISION NOT NULL DEFAULT 500",
+                "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS base_price DOUBLE PRECISION NOT NULL DEFAULT 1000",
                 "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS included_users_per_site INTEGER NOT NULL DEFAULT 3",
                 "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS extra_user_price DOUBLE PRECISION NOT NULL DEFAULT 0",
                 "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS vat_rate DOUBLE PRECISION NOT NULL DEFAULT 0.20",
@@ -1049,10 +1064,10 @@ def init_db():
 init_db()
 
 # Normalize the commercial model for existing database rows. Stripe recurring price
-# itself is controlled by STRIPE_BASE_PRICE_ID and must point to the £600 gross price.
+# itself is controlled by STRIPE_BASE_PRICE_ID and must point to the £1,200 gross price.
 try:
-    execute("UPDATE subscriptions SET base_price=?,extra_user_price=?,included_users_per_site=?", (BASE_PRICE_PER_SITE, 0.0, 0))
-    execute("UPDATE subscriptions SET monthly_price=? * GREATEST(1,COALESCE(contracted_sites,1))", (BASE_PRICE_PER_SITE,))
+    execute("UPDATE subscriptions SET base_price=?,extra_user_price=?,included_users_per_site=? WHERE COALESCE(contract_start,'')=''", (BASE_PRICE_PER_SITE, 0.0, 0))
+    execute("UPDATE subscriptions SET monthly_price=? * GREATEST(1,COALESCE(contracted_sites,1)) WHERE COALESCE(contract_start,'')=''", (BASE_PRICE_PER_SITE,))
 except Exception:
     pass
 
@@ -1452,7 +1467,8 @@ def subscribe():
             error = "You must accept the 12-month minimum-term agreement to continue."
         else:
             try:
-                base_price_id = os.environ.get("STRIPE_BASE_PRICE_ID", "").strip()
+                base_price_id = ((sub or {}).get("stripe_base_price_id") if (sub or {}).get("contract_start") else None) or os.environ.get("STRIPE_BASE_PRICE_ID", "").strip()
+                validate_subscription_price(stripe_request("GET", "/prices/" + base_price_id), pricing["base_price"])
                 extra_price_id = ""
                 success_url = request.url_root.rstrip("/") + "/subscription/success?session_id={CHECKOUT_SESSION_ID}"
                 cancel_url = request.url_root.rstrip("/") + "/subscribe"
@@ -3926,7 +3942,7 @@ def company_admin_customers():
                 COALESCE(s.next_billing_date,'') next_billing_date,
                 COALESCE(s.contract_start,'') contract_start,COALESCE(s.contract_end,'') contract_end,
                 COALESCE(s.contracted_sites,1) contracted_sites,COALESCE(s.contracted_users,3) contracted_users,
-                COALESCE(s.base_price,500) base_price,0 extra_user_price,
+                COALESCE(s.base_price,1000) base_price,0 extra_user_price,
                 (SELECT COUNT(*) FROM sites st WHERE st.organisation_id=o.id AND st.active=1) site_count,
                 (SELECT COUNT(*) FROM users u WHERE u.organisation_id=o.id AND u.active=1) user_count,
                 (SELECT COALESCE(SUM(sp.amount),0) FROM subscription_payments sp WHERE sp.organisation_id=o.id AND sp.status='Paid') total_paid
