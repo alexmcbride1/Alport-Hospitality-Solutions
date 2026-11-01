@@ -120,7 +120,7 @@ def register_staff(app,env):
                  'alport_staff.portal','alport_staff.me','alport_staff.request_leave','alport_staff.withdraw',
                  'alport_staff.orders','alport_staff.order_detail','alport_staff.new_order','alport_staff.password','alport_staff.compliance','alport_staff.training','staff_onboarding_portal','staff_onboarding_details','staff_training_submit'} | eho_endpoints
         if request.endpoint=='app_home':return redirect('/staff')
-        if request.blueprint in ('alport_people','alport_passkeys','alport_ai'):allowed.add(request.endpoint)
+        if request.blueprint in ('alport_people','alport_passkeys','alport_ai','alport_evidence'):allowed.add(request.endpoint)
         if request.endpoint not in allowed:return jsonify(error='This account has personal staff and compliance access only.'),403
         if request.endpoint in ('staff_onboarding_portal','staff_onboarding_details','staff_training_submit'):
             if not live(a) or not q('SELECT id FROM employee_onboarding WHERE token=? AND employee_id=? AND organisation_id=? AND site_id=?',(request.view_args.get('token'),a['employee_id'],a['organisation_id'],a['site_id']),True):return jsonify(error='This onboarding invitation does not belong to your account.'),403
@@ -450,3 +450,6 @@ def register_staff(app,env):
         return response
     app.extensions.update(alport_staff_own=own,alport_staff_manager=manager,alport_staff_access=access,alport_staff_live=live,alport_staff_event=event,alport_staff_csrf=csrf)
     app.register_blueprint(bp)
+
+    from alport_evidence import register_evidence
+    register_evidence(app, env)
