@@ -3734,7 +3734,7 @@ def send_booking_review(booking_id):
 @manager_required
 def send_retention_campaign():
     u,site=user(),current_site();settings=booking_settings_for(u["organisation_id"],site["id"]);weeks=int(settings.get("lapsed_guest_weeks") or 6);cutoff=(date.today()-timedelta(weeks=weeks)).isoformat()
-    guests=q("""SELECT g.*,MAX(CASE WHEN b.status='Completed' THEN b.booking_date ELSE NULL END) last_visit FROM guests g LEFT JOIN bookings b ON b.guest_id=g.id WHERE g.organisation_id=? AND g.marketing_consent=1 AND COALESCE(g.marketing_opt_out_at,'')='' GROUP BY g.id HAVING MAX(CASE WHEN b.status='Completed' THEN b.booking_date ELSE NULL END) IS NOT NULL AND MAX(CASE WHEN b.status='Completed' THEN b.booking_date ELSE NULL END)<=?""",(u["organisation_id"],cutoff))
+    guests=q("""SELECT g.*,MAX(CASE WHEN b.status='Completed' THEN b.booking_date ELSE NULL END) last_visit FROM guests g JOIN bookings b ON b.guest_id=g.id AND b.organisation_id=g.organisation_id AND b.site_id=? WHERE g.organisation_id=? AND g.marketing_consent=1 AND COALESCE(g.marketing_opt_out_at,'')='' GROUP BY g.id HAVING MAX(CASE WHEN b.status='Completed' THEN b.booking_date ELSE NULL END) IS NOT NULL AND MAX(CASE WHEN b.status='Completed' THEN b.booking_date ELSE NULL END)<=?""",(site["id"],u["organisation_id"],cutoff))
     sent=0
     for g in guests:
         if not g["email"]:continue
@@ -4271,6 +4271,9 @@ from alport_pub_planning import register_pub_planning
 register_pub_planning(app, globals())
 from alport_product_tour import register_product_tour
 register_product_tour(app, globals())
+
+from alport_booking_diary import register_booking_diary
+register_booking_diary(app, globals())
 
 if __name__ == "__main__":
     app.run(
