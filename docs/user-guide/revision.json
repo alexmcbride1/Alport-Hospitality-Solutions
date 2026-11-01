@@ -1,19 +1,19 @@
 {
-  "revision": 6,
-  "captured_at": "2026-11-01T15:21:50.231085+00:00",
-  "deployed_commit": "12a75666b1b9f1c49184dbacea834205ab07ce61",
-  "page_count": 20,
+  "revision": 7,
+  "captured_at": "2026-11-01T16:13:36.542261+00:00",
+  "deployed_commit": "30b2c8f287f51cd5407d39ade8b4a6ee16af194f",
+  "page_count": 22,
   "live_url": "https://alporthospitality.co.uk/user-guide",
   "changes": [
-    "Daily booking diary date, filters, sorting and pagination",
-    "Booking detail edits and service actions",
-    "Historical site guest search by name or phone",
-    "Saved guest VIP marking/removal and site-private comments",
-    "Explicit management role and comment privacy boundaries"
+    "Public per-pub website booking links and HTML button code",
+    "Manager contact, availability setup and enable/pause workflow",
+    "Required name, email, phone, allergies and special occasion",
+    "Onscreen confirmation and private management link; no public-path email",
+    "Updated diary and booking detail captures"
   ],
   "pending": "None for this deployed feature release; later changes need a new guide review.",
   "training_deployed_commit": "374fbee8e0fc69116306da4393d47b7a0a3a98d8",
   "training_update": "Six onboarding modules; existing screenshots remain accurate. No new production employee record or invitation created.",
   "pending_features": [],
-  "notes": "Live empty diary captured after PR9. Booking-detail and guest-profile illustrations captured from the isolated fictional preview of the shipped UI, explicitly labelled. Other accurate screenshots retained. No production guest record, email or payment created."
+  "notes": "Live paused website-link settings and empty diary captured after PR10. Guest form and booking detail use explicitly labelled fictional local previews of deployed UI. No production link enabled or reservation created. No new deposit controls or payment checkout. Other accurate screenshots retained."
 }
