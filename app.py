@@ -4264,6 +4264,12 @@ register_passkeys(app, globals())
 from alport_experience import register_experience
 register_experience(app, globals())
 
+from alport_pub import register_pub
+register_pub(app, globals())
+
+from alport_pub_planning import register_pub_planning
+register_pub_planning(app, globals())
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",

@@ -128,7 +128,7 @@ def register_experience(app, env):
             ('Opening stock', bool(q("SELECT id FROM stocktakes WHERE organisation_id=? AND site_id=? AND status='Complete' LIMIT 1",(u['organisation_id'],sid))), '/app?section=stock'),
             ('This month’s budget', bool(budget), '/app?section=budgets'),
             ('Sales entered', bool(current['source_dates']['sales']), '/app?section=sales')]
-        return jsonify(site=s, month=month, refreshed_at=datetime.now(UK).isoformat(), operations=operations(u['organisation_id'],sid),
+        return jsonify(pub_attention=app.extensions.get('alport_pub_attention',lambda org,sid:[])(u['organisation_id'],sid), site=s, month=month, refreshed_at=datetime.now(UK).isoformat(), operations=operations(u['organisation_id'],sid),
             finance=current, previous=previous, budget=budget,
             setup=[{'label':label,'done':done,'url':url} for label,done,url in checks])
 
@@ -167,4 +167,5 @@ def register_experience(app, env):
         session['site_id']=sid;session['staff_site_id']=sid
         return jsonify(ok=True)
 
+    app.extensions['alport_experience_sites']=sites
     app.register_blueprint(bp)
