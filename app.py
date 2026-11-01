@@ -1,3 +1,4 @@
+from alport_access import preview_session_values
 import os
 from datetime import date, datetime, timedelta
 from functools import wraps
@@ -1452,7 +1453,9 @@ def login():
             sub = subscription_for(u["organisation_id"])
             if subscription_blocks_access(sub):
                 return render_template("login.html", error="This Alport Hospitality Solutions account is currently suspended because the subscription is not in good standing. Please contact Alport Hospitality Solutions support."), 403
+            preview = preview_session_values(session, u)
             session.clear()
+            session.update(preview)
             session["user_id"] = u["id"]
             s = q(
                 "SELECT * FROM sites WHERE organisation_id=? AND active=1 ORDER BY id LIMIT 1",
@@ -1461,7 +1464,7 @@ def login():
             )
             if s:
                 session["site_id"] = s["id"]
-            if sub and sub.get("status") == "Payment required":
+            if sub and sub.get("status") == "Payment required" and not preview:
                 return redirect(url_for("subscribe"))
             return redirect(url_for("app_home"))
         return render_template("login.html", error="Incorrect email or password. Staff portal accounts should use /staff/login.")
@@ -1558,7 +1561,7 @@ def subscribe():
     organisation_id = u["organisation_id"]
     sub = subscription_for(organisation_id)
     pricing = pricing_for(organisation_id)
-    if sub and sub.get("status") == "Active":
+    if (sub and sub.get("status") == "Active") or preview_session_values(session, u):
         return redirect(url_for("app_home"))
 
     error = None
@@ -1579,9 +1582,10 @@ def subscribe():
             ):
                 session["billing_preview_bypass_org"] = int(organisation_id)
                 session["billing_preview_admin"] = True
+                session["billing_preview_user_id"] = int(u["id"])
                 return redirect(url_for("app_home"))
 
-            error = "Incorrect company admin email or password."
+            error = "Company admin credentials were not accepted. Use your separate Alport company-admin credentials, not your business sign-in. If needed, the hosting account owner can reset them securely in Render."
 
         elif not stripe_configured():
             error = "Online billing is not fully configured yet. Please contact Alport Hospitality Solutions."
@@ -1870,10 +1874,7 @@ def app_home():
     u = user()
     sub = subscription_for(u["organisation_id"])
     if sub and sub.get("status") == "Payment required":
-        preview_ok = (
-            session.get("billing_preview_admin") is True
-            and int(session.get("billing_preview_bypass_org") or 0) == int(u["organisation_id"])
-        )
+        preview_ok = bool(preview_session_values(session, u))
         if not preview_ok:
             return redirect(url_for("subscribe"))
     if subscription_blocks_access(sub):
