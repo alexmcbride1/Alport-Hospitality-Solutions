@@ -1,5 +1,5 @@
 {
-  "revision": 2,
+  "revision": 3,
   "captured_at": "2026-11-01T13:42:00Z",
   "deployed_commit": "17b0bdc2fd560a79df0a0111d62364fa7555a100",
   "page_count": 8,
@@ -10,5 +10,7 @@
     "Compliance evidence links",
     "Team chat instructions"
   ],
-  "pending": "Further dashboard, comparisons, owner overview, chat tasks, mobile navigation and walkthrough PR work is not covered until deployed."
+  "pending": "Further dashboard, comparisons, owner overview, chat tasks, mobile navigation and walkthrough PR work is not covered until deployed.",
+  "training_deployed_commit": "374fbee8e0fc69116306da4393d47b7a0a3a98d8",
+  "training_update": "Six onboarding modules; existing screenshots remain accurate. No new production employee record or invitation created."
 }
