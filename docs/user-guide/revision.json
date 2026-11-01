@@ -1,16 +1,14 @@
 {
-  "revision": 4,
-  "captured_at": "2026-11-01T14:25:00Z",
-  "deployed_commit": "7f1f4a5aa5ce818b52942d11aad96f7ab33da371",
+  "revision": 5,
+  "captured_at": "2026-11-01T14:45:00Z",
+  "deployed_commit": "03e078b57197256390b4e33a15aedd6ccf197484",
   "page_count": 18,
   "live_url": "https://alporthospitality.co.uk/user-guide",
   "changes": [
-    "Today at my site and finance/source warnings",
-    "Setup, owner overview and accountability",
-    "Chat unread mentions and tasks",
-    "All seven pub operations workflows",
-    "Public product tour",
-    "Six onboarding modules preserved"
+    "Grouped venue sidebar replaces top tools and floating shortcuts",
+    "Mobile More uses the same grouped navigation",
+    "Dashboard focuses on figures and alerts with expandable weather",
+    "Updated navigation screenshot and group instructions"
   ],
   "pending": "None for this deployed feature release; later changes need a new guide review.",
   "training_deployed_commit": "374fbee8e0fc69116306da4393d47b7a0a3a98d8",

@@ -31,7 +31,7 @@ def page(n,title,sub):
  c.setFillColor(D); c.setFont('Helvetica-Bold',25); c.drawString(46,H-140,title)
  text(sub,46,H-156,size=10,color=MUT)
  c.setStrokeColor(GOLD); c.line(46,43,549,43)
- c.setFont('Helvetica',8); c.setFillColor(MUT); c.drawString(46,29,'ALPORT HOSPITALITY SOLUTIONS  |  USER GUIDE  |  NOVEMBER 2026  |  REVISION 4'); c.drawRightString(549,29,str(n))
+ c.setFont('Helvetica',8); c.setFillColor(MUT); c.drawString(46,29,'ALPORT HOSPITALITY SOLUTIONS  |  USER GUIDE  |  NOVEMBER 2026  |  REVISION 5'); c.drawRightString(549,29,str(n))
 
 def item(num,title,body,y):
  c.setFillColor(G); c.circle(58,y-10,11,fill=1,stroke=0); c.setFillColor(white); c.setFont('Helvetica-Bold',10); c.drawCentredString(58,y-14,str(num))
@@ -58,24 +58,28 @@ flow(['Sign in','Check your venue','Choose a task','Review & save'],y-38)
 y=y-130
 for n,title,body in [('2','Find your way around','Navigation and the workspace map.'),('3-6','Everyday operations','Bookings, stock, people, rota and EHO checks.'),('7-8','Finance and team chat','Find tools, mention colleagues and assign tasks.'),('9-10','Today at my site','Daily actions, finance, setup and owner oversight.'),('11-13','Pub records','Cashing up, licensing, incidents and cellar controls.'),('14-15','Planning and allergens','Manual cash forecast and recipe-linked reviews.'),('16-17','Repairs and handover','Equipment, photos and actions for the next shift.'),('18','Product tour and help','Explore examples and find the right support.')]:
  y=text(f'<b>{n} / {title}</b> &nbsp; {body}',46,y,503,11)-16
-text('Refreshed 1 November 2026 after the navigation and Team chat updates. Screenshots show empty workspace records. Your data and available actions may differ. Revision 4.',46,115,503,9,MUT)
+text('Refreshed 1 November 2026 after the venue dashboard and sidebar tidy-up. Screenshots show empty workspace records. Your data and available actions may differ. Revision 5.',46,115,503,9,MUT)
 c.showPage()
-page(2,'Find your way around','Start by checking the organisation and venue shown beside the Alport logo.')
-y=shot('navigation')
-y=item(1,'Top links and venue header','The branded Workspace tools links open the User guide, Returns & credits, People & attendance, Sales & forecast inputs and Face ID & passkeys. Check your organisation and venue beside the logo.',y)
-y=item(2,'Sidebar and screen tabs','Choose a section from the green sidebar. The main panel changes to that task. Tabs such as Diary, Service and Reports switch views within a section.',y)
-y=item(3,'On a phone','Use the bottom navigation and tap More for additional sections. Open the Workspace tools dropdown for the top links, including User guide. Team chat and My private assistant appear in the floating tools bar.',y)
-flow(['Operations<br/>Bookings, stock,<br/>purchasing, menu','People<br/>Staff, shifts,<br/>payroll','Finance<br/>Invoices, payments,<br/>budgets'],y-3)
-text('<b>New starting points:</b> Today at my site brings daily actions together; Pub operations opens the new registers. EHO Compliance, Audit log, Sites, Users and Settings remain available.',46,y-74,503,10)
+page(2,'Find your way around','On desktop, venue details and navigation are together in the left sidebar.')
+im=Image.open(ROOT/'screenshots/navigation.jpg'); nw=125; nh=nw*im.height/im.width
+c.drawImage(str(ROOT/'screenshots/navigation.jpg'),46,635-nh,width=nw,height=nh)
+y=635
+for title,body in [
+ ('1 / Start with your venue','Check the organisation and site beneath the Alport logo. Dashboard shows key figures and alerts. Expand Weather at your venue when you need the forecast.'),
+ ('2 / Choose a task','Today at my site, Pub operations, Team chat and My private assistant are near the top. Expand Operations, People, Finance, Compliance or Manage venue for the tools in each group.'),
+ ('3 / Find help and settings','User guide and Sign out are under Help &amp; account. Face ID &amp; passkeys and Setup &amp; Till connections are under Manage venue. Owner assistant setup and access links appear when permitted.'),
+ ('4 / On a phone','Keep using the bottom navigation. Tap More to open the same grouped menu, expand a group and choose a section. The menu closes when you select a workspace screen.')]:
+ y=text('<b>'+title+'</b><br/>'+body,190,y,359,11)-20
+flow(['Choose a group','Open a section','Review & act'],130)
 c.showPage()
-page(3,'Bookings & guests','From the sidebar, select Bookings & Guests. On mobile, open More > Bookings.')
+page(3,'Bookings & guests','Open Operations > Bookings & Guests in the sidebar, or More > Operations on mobile.')
 y=shot('bookings')
 y=item(1,'Pick the service date','Use the date field above the summary cards, then review the Diary. Covers, bookings and peak figures relate to the selected date.',y)
 y=item(2,'Add a booking','Select + New booking. Fill in the guest and reservation details, review the date, time and party size, then save. Check that the booking appears in the diary.',y)
 y=item(3,'Move between views','Use Service for the service view, Guests for guest records and Reports for booking summaries. Settings contains reservation configuration.',y)
 text('<b>Empty diary?</b> Check the selected date and venue, then use Refresh. An empty date does not mean the website has no bookings.',46,y,503,10)
 c.showPage()
-page(4,'Stock & purchasing','Use Stock for quantities and counts; Purchasing for supplier orders.')
+page(4,'Stock & purchasing','Expand Operations: Stock holds quantities and counts; Purchasing holds supplier orders.')
 y=shot('stock')
 y=item(1,'Read your stock list','Review On hand, Par, Unit cost and Status. Par is the target level used to flag low stock. Use + Add stock item to create a stock record.',y)
 y=item(2,'Count stock','Select Start stocktake and confirm. Enter each counted quantity. Use Continue on an open stocktake if you need to return to it.',y)
@@ -83,15 +87,15 @@ y=item(3,'Complete the count','Review all counts, then select Complete stocktake
 flow(['Review levels','Count & check','Complete stocktake'],y-5)
 text('<b>Related tools:</b> Stock usage & suggested orders helps review demand. Purchasing handles orders. Returns & credits records supplier returns and credits. Menu & Costing is the place for recipes and dish costs.',46,y-80,503,11)
 c.showPage()
-page(5,'People & rota','Use Staff for employee records and Shifts & Rota for planned working hours.')
+page(5,'People & rota','Expand People for Staff records, Shifts & Rota and Payroll.')
 y=shot('rota')
-y=item(1,'Choose the right people tool','Staff contains employee records. Staff access & time off manages portal access and requests. People & attendance is available in the top links.',y)
+y=item(1,'Choose the right people tool','Staff contains employee records. Staff access & time off manages portal access and requests. People & attendance is in the People group.',y)
 y=item(2,'Plan a shift','Open Shifts & Rota and select + Add shift. Choose the employee and date, enter start and finish times, and record the break in minutes. Select Save shift.',y)
 y=item(3,'Review the rota','Check the date, employee, hours, rate and estimated cost in the table. Review booking demand alongside the rota when it is available.',y)
 flow(['Staff records','Shifts & breaks','Review labour','Payroll'],y-6)
 text('<b>New starters:</b> Add &amp; invite employee assigns six modules: Food Hygiene, Allergen Safety, HACCP/SFBB, Workplace Safety, Fire Safety and Equality &amp; Discrimination. Each has five questions and an 80% pass mark. Check completion in Staff &amp; Onboarding; rota creation does not enforce completion.',46,y-80,503,9)
 c.showPage()
-page(6,'EHO Compliance','Select EHO Compliance from the sidebar, or from More on mobile.')
+page(6,'EHO Compliance','Open Compliance > EHO Compliance in the sidebar, or More > Compliance on mobile.')
 y=shot('compliance')
 y=item(1,'Open the required check','Use Opening checks or Closing checks for the daily checklist. Record temperature opens the temperature entry form.',y)
 y=item(2,'Record and follow up','Use Add compliance record for supporting activity. Review the record, status and any corrective action before saving. Check recent activity to confirm it was recorded.',y)
@@ -109,9 +113,9 @@ for title,body in [
  ('Users / Settings / Face ID & passkeys','Use Users for account access, Settings for workspace configuration and Face ID & passkeys for supported sign-in options. Availability depends on your role.'),
  ('Help & cookies','Open Help & cookies in the lower corner for the available help options. When reporting an issue, include the section, selected date and what you expected to happen.')]:
   y=text('<b>'+title+'</b><br/>'+body,46,y,503,11)-18
-text('<b>Quick fixes</b><br/>Missing records: check the venue, date or period, then Refresh.<br/>Permission message: ask your manager or administrator.<br/>On mobile: open More for sections or Workspace tools for extra links.<br/>Finished on a shared device: use Sign out.',46,y,503,10)
+text('<b>Quick fixes</b><br/>Missing records: check the venue, date or period, then Refresh.<br/>Permission message: ask your manager or administrator.<br/>On mobile: open More, then expand the group for the section you need.<br/>Finished on a shared device: use Sign out.',46,y,503,10)
 c.showPage()
-page(8,'Team chat & tasks','Open Team chat from Today at my site, the workspace tools or your staff portal.')
+page(8,'Team chat & tasks','Open Team chat from the venue sidebar, Today at my site or your staff portal.')
 y=shot('chat')
 y=item(1,'Choose the site and check unread messages','Each site has its own shared room. Read the unread count, use Refresh if needed and Load older messages for earlier history.',y)
 y=item(2,'Send an update and mention colleagues','Write up to 2,000 characters. Select names in Mention people to flag unread mentions, then select Send message. Enter adds a new line. Mentions stay inside Alport.',y)
