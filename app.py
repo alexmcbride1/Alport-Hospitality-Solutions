@@ -967,6 +967,128 @@ TRAINING_MODULES = {
             {"q":"Does online induction replace site-specific safety instruction?","options":["Yes","No","Only for kitchen staff"],"answer":1},
         ],
     },
+
+    "fire_safety": {
+        "title": "Fire Safety",
+        "version": "2026.1",
+        "refresh_months": 12,
+        "summary": "Preventing fires, raising the alarm, safe evacuation and the venue's emergency arrangements.",
+        "lessons": [
+            "Before starting work, ask your manager to show you the alarm call points, safe escape routes, assembly point and your role in the venue's fire plan. Tell them if you need help to evacuate; agree the appropriate arrangements in advance.",
+            "If you discover a fire, raise the alarm immediately and leave by a safe route. Ensure the fire service is called on 999 from a safe place in line with the venue's emergency plan. Do not delay evacuation to collect belongings or investigate smoke.",
+            "Guide guests towards safe exits as instructed, without putting yourself at risk. Use the stairs unless the venue's agreed evacuation arrangements specifically provide otherwise. Report to the assembly point, tell the person in charge about anyone missing and never re-enter until authorised.",
+            "Keep exits and escape routes clear and fire doors unobstructed. Report damaged electrical equipment, overloaded sockets, faulty alarms and unsafe storage. Follow the venue's controls for cooking, hot work, smoking and combustible waste.",
+            "Only attempt to use firefighting equipment if trained, authorised and it is safe, with a clear escape route. Never use water on burning cooking oil or live electrical equipment. This course does not qualify you as a fire warden or replace the venue's practical induction and drills."
+        ],
+        "questions": [
+            {
+                "q": "You discover smoke and fire in a store room. What should you do first?",
+                "options": [
+                    "Investigate alone",
+                    "Raise the alarm and leave by a safe route",
+                    "Finish serving the current table"
+                ],
+                "answer": 1
+            },
+            {
+                "q": "Where should you go after leaving the building?",
+                "options": [
+                    "Home without telling anyone",
+                    "Back inside to check for colleagues",
+                    "The agreed assembly point and report to the person in charge"
+                ],
+                "answer": 2
+            },
+            {
+                "q": "A delivery blocks a fire exit. What is the right action?",
+                "options": [
+                    "Keep the escape route clear and report the obstruction",
+                    "Leave it until closing",
+                    "Prop another fire door open instead"
+                ],
+                "answer": 0
+            },
+            {
+                "q": "When may you attempt to use firefighting equipment?",
+                "options": [
+                    "Whenever a fire looks small",
+                    "Only if trained, authorised and safe, with a clear escape route",
+                    "Before raising the alarm"
+                ],
+                "answer": 1
+            },
+            {
+                "q": "Does this online module replace a walkthrough of your venue's evacuation arrangements?",
+                "options": [
+                    "Yes",
+                    "Only for experienced staff",
+                    "No, you also need the venue's practical instruction and drills"
+                ],
+                "answer": 2
+            }
+        ]
+    },
+    "equality_discrimination": {
+        "title": "Equality, Discrimination & Respect at Work",
+        "version": "2026.1",
+        "refresh_months": 12,
+        "summary": "Fair treatment, discrimination, harassment, reasonable adjustments and reporting concerns in a hospitality workplace.",
+        "lessons": [
+            "Treat colleagues, applicants and guests respectfully. In Great Britain, the Equality Act's protected characteristics are age, disability, gender reassignment, marriage and civil partnership, pregnancy and maternity, race, religion or belief, sex and sexual orientation. Northern Ireland has a different legal framework; follow the venue's applicable equality policy.",
+            "Do not make unfair decisions about shifts, training or opportunities based on someone's identity or stereotypes. A rule applied to everyone can still disadvantage a protected group: raise concerns with a manager rather than assuming that identical treatment is always fair.",
+            "Unwanted sexual comments, touching or messages and degrading identity-based jokes are unacceptable. Calling behaviour banter does not excuse its impact. This applies during service, work events and work-related chats, including behaviour from customers.",
+            "Disability-related adjustments can include accessible training, equipment or working arrangements. Ask your manager about support you need and respect agreed adjustments for colleagues. Do not demand private medical details or assume that an unseen disability is not real.",
+            "If you experience or witness a concern, record the facts and use the employer's reporting procedure. If your manager is involved, use another manager, the owner or HR. Seek help immediately if unsafe. Do not retaliate against someone for raising or supporting a discrimination complaint; share sensitive details only with those handling the concern."
+        ],
+        "questions": [
+            {
+                "q": "A colleague says a racist joke is just banter. What is the right response?",
+                "options": [
+                    "Ignore it because it was a joke",
+                    "Recognise it as unacceptable and use the reporting procedure",
+                    "Share it in the team chat"
+                ],
+                "answer": 1
+            },
+            {
+                "q": "A rule is the same for everyone. Can it still create a discrimination concern?",
+                "options": [
+                    "No, identical rules are always fair",
+                    "Only if it is written down",
+                    "Yes, it can disadvantage a protected group and should be reviewed"
+                ],
+                "answer": 2
+            },
+            {
+                "q": "A colleague has an agreed disability-related adjustment. What should you do?",
+                "options": [
+                    "Respect it and follow the agreed arrangements",
+                    "Demand their diagnosis",
+                    "Insist everyone works in exactly the same way"
+                ],
+                "answer": 0
+            },
+            {
+                "q": "Who can you approach if the manager you normally report to is involved in the concern?",
+                "options": [
+                    "Nobody",
+                    "Another manager, the owner or HR under the employer's procedure",
+                    "Only the person involved"
+                ],
+                "answer": 1
+            },
+            {
+                "q": "A worker supports a discrimination complaint. Is it acceptable to cut their shifts as punishment?",
+                "options": [
+                    "Yes, to stop complaints",
+                    "Only if colleagues agree",
+                    "No, do not retaliate for raising or supporting a complaint"
+                ],
+                "answer": 2
+            }
+        ]
+    }
+
 }
 
 
@@ -4142,6 +4264,11 @@ register_passkeys(app, globals())
 from alport_experience import register_experience
 register_experience(app, globals())
 
+from alport_pub import register_pub
+register_pub(app, globals())
+
+from alport_pub_planning import register_pub_planning
+register_pub_planning(app, globals())
 from alport_product_tour import register_product_tour
 register_product_tour(app, globals())
 

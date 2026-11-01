@@ -45,6 +45,23 @@ Financial estimates preserve the existing gross sales/expense basis. Stock usage
 
 Run `python -m unittest discover -s tests`. Browser-check Owner and staff views, chat mentions/task creation and mobile layout at 390px. The existing user guide, support form and evidence capture are reused.
 
+### Pub operations
+
+Open **Pub operations** from **Today at my site**. Every API request rechecks active business/site access. Manager-only sections require Owner access or an active full site assignment with Manager, General Manager or Admin role. Chat-only membership does not grant operational access.
+
+- Cashing up: separate till/session references, exact decimal cash/card variances, discounts already included in sales, explanation before signing a variance, immutable manager sign-off and audited edits. No automatic sales-ledger posting.
+- Licensing: venue jurisdiction, actual licence conditions/hours, responsible person and entered deadlines. Refusal/incident reports are private to their author and site managers. No inferred legal permissions or automatic compliance certification.
+- Cellar: line-cleaning dates, venue-set temperature targets, cask/keg yield and stock-item wastage. Wastage deducts once in the stock item’s unit, with an atomic stock movement; signed cash-ups and wastage are immutable.
+- Cash flow: opening available cash and 13 seven-day periods with dated income/outgoings. Cancelled entries are excluded. Wage and tax provision entries are manual assumptions, not approved actual payroll or statutory calculations. No payroll payments or bank transfers.
+- Allergens: explicitly link each recipe component to an active stock ingredient and review all 14 states against a supplier specification. Unlinked, unknown or changed supplier/ingredient data requires review; recipe/mapping changes invalidate a prior recipe review. “Not declared in reviewed source” is not an allergen-free claim. Record specific cereal/nut details and preparation/cross-contact checks.
+- Repairs: urgency, assignee, contractor, costs, due date, completion notes and up to five private JPEG/PNG/WebP photos (8 MB each). Completion requires a valid date and notes. Recurring services use separate dated records.
+- Manager handovers: service notes plus selected actions shared into the existing site Team chat with assignee, due date, mention and task history. Retried action submissions do not create duplicate tasks.
+
+Alerts feed into the existing Today dashboard. Records paginate in batches of 50. Additive tables are created under PostgreSQL advisory transaction locks; writes use existing database connections and audited transactions. No external services, new credentials or production dependency changes. There is no automatic record expiry or customer-facing deletion in this version.
+
+Validation: `python -m unittest discover -s tests` covers scope, CSRF, exact cash calculations, immutable sign-off, atomic/retried wastage, forecast week boundaries, supplier/recipe invalidation, photo permissions and handover tasks. SQLite fixtures validate application behavior; they do not replace PostgreSQL execution testing. Local PostgreSQL execution was attempted but blocked by the desktop sandbox’s shared-memory restriction.
+
+Guide impact: the Alport website manager / existing guide worker owns the post-deployment update to `/user-guide`, screenshots and `private_docs/Alport-Website-User-Guide.pdf`. Capture the deployed revision and add the seven workflows above; do not label preview screenshots as live. Guide authentication must remain unchanged.
 ## Public product walkthrough
 
 `/product-tour` is an example-only public walkthrough with screenshots captured from local fixtures, not production customer data. Pricing uses `BASE_PRICE_PER_SITE`, `VAT_RATE` and `CONTRACT_MONTHS`; it does not change checkout or existing agreements. The optional calculator supports 1–100 venues and includes the minimum-term total. All walkthrough panels and base pricing remain available without JavaScript. Screenshots should be refreshed when the underlying workspace changes. This change depends on the daily workspace/team-task feature.
