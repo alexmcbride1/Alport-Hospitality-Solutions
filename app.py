@@ -1919,6 +1919,10 @@ def dashboard():
     )
 
 
+from alport_finance_reports import register_finance_reports
+register_finance_reports(app, globals())
+
+
 @app.get("/api/finance")
 @login_required
 def api_finance():
