@@ -44,3 +44,7 @@ New tables are created on startup under the existing advisory lock: `alport_chat
 Financial estimates preserve the existing gross sales/expense basis. Stock usage uses current item costs; labour uses scheduled shifts (including overnight work), excludes cancelled/declined shifts and excludes employer costs. Full-month comparisons are labelled; missing records are not proof of zero activity. Staffing warnings identify bookings with no scheduled staff, not every possible shortage.
 
 Run `python -m unittest discover -s tests`. Browser-check Owner and staff views, chat mentions/task creation and mobile layout at 390px. The existing user guide, support form and evidence capture are reused.
+
+## Public product walkthrough
+
+`/product-tour` is an example-only public walkthrough with screenshots captured from local fixtures, not production customer data. Pricing uses `BASE_PRICE_PER_SITE`, `VAT_RATE` and `CONTRACT_MONTHS`; it does not change checkout or existing agreements. The optional calculator supports 1–100 venues and includes the minimum-term total. All walkthrough panels and base pricing remain available without JavaScript. Screenshots should be refreshed when the underlying workspace changes. This change depends on the daily workspace/team-task feature.
