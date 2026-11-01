@@ -3504,6 +3504,9 @@ def manage_reservation_action(token):
         return render_template("manage_reservation.html",booking=dict(b),settings=settings,success="Your reservation has been cancelled.")
     if hours < int(settings.get("amendment_notice_hours") or 0):
         return render_template("manage_reservation.html",booking=b,settings=settings,error="Online changes are no longer available for this booking. Please contact the restaurant directly."),400
+    from alport_booking_fields import validate_guest_fields
+    try:guest_fields=validate_guest_fields(request.form)
+    except ValueError as e:return render_template("manage_reservation.html",booking=b,settings=settings,error=str(e)),400
     new_date=request.form.get("booking_date") if int(settings.get("guest_can_change_date") or 0) else b["booking_date"]
     new_time=request.form.get("booking_time") if int(settings.get("guest_can_change_time") or 0) else b["booking_time"]
     new_party=int(request.form.get("party_size") or b["party_size"]) if int(settings.get("guest_can_change_party") or 0) else int(b["party_size"])
@@ -3511,7 +3514,7 @@ def manage_reservation_action(token):
     options=booking_available_tables(b["organisation_id"],b["site_id"],new_date,new_time,new_party,duration,exclude_booking_id=b["id"])
     if not options: return render_template("manage_reservation.html",booking=b,settings=settings,error="That change is not available. Please choose another time or contact the restaurant."),409
     table_id=options[0]["id"]
-    execute("UPDATE bookings SET booking_date=?,booking_time=?,party_size=?,table_id=?,special_requests=?,dietary_requirements=?,updated_at=? WHERE id=?",(new_date,new_time,new_party,table_id,request.form.get("special_requests") or "",request.form.get("dietary_requirements") or "",now(),b["id"]))
+    execute("UPDATE bookings SET booking_date=?,booking_time=?,party_size=?,table_id=?,special_requests=?,dietary_requirements=?,special_occasion=?,guest_name=?,guest_email=?,guest_phone=?,updated_at=? WHERE id=?",(new_date,new_time,new_party,table_id,request.form.get("special_requests") or "",guest_fields["dietary_requirements"],guest_fields["special_occasion"],guest_fields["guest_name"],guest_fields["guest_email"],guest_fields["guest_phone"],now(),b["id"]))
     updated=q("SELECT b.*,s.name site_name,s.address site_address FROM bookings b JOIN sites s ON s.id=b.site_id WHERE b.id=?",(b["id"],),True)
     return render_template("manage_reservation.html",booking=updated,settings=settings,success="Your reservation has been updated.")
 
@@ -3540,7 +3543,11 @@ def booking_deposit_checkout(booking_id):
 @manager_required
 def create_booking():
     u, site = user(), current_site()
-    d = request.get_json() or {}
+    d = request.get_json(silent=True)
+    if not isinstance(d,dict):return jsonify(error="Send valid booking details"),400
+    from alport_booking_fields import validate_guest_fields
+    try:d.update(validate_guest_fields(d))
+    except ValueError as e:return jsonify(error=str(e)),400
     name = (d.get("guest_name") or "").strip()
     email = (d.get("guest_email") or "").strip().lower()
     phone = (d.get("guest_phone") or "").strip()
@@ -3567,9 +3574,9 @@ def create_booking():
     manage_token=secrets.token_urlsafe(32)
     deposit_required=_deposit_amount(settings,party)
     deposit_status="Required" if deposit_required>0 else "Not required"
-    booking_id = execute("""INSERT INTO bookings(organisation_id,site_id,guest_id,booking_date,booking_time,party_size,duration_minutes,status,source,table_id,guest_name,guest_email,guest_phone,special_requests,dietary_requirements,internal_notes,marketing_consent,manage_token,deposit_required,deposit_status,created_at,updated_at)
-                          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                         (u["organisation_id"],site["id"],guest_id,booking_date,booking_time,party,duration,d.get("status") or "Confirmed",d.get("source") or "Manager",table_id,name,email,phone,d.get("special_requests") or "",d.get("dietary_requirements") or "",d.get("internal_notes") or "",1 if d.get("marketing_consent") else 0,manage_token,deposit_required,deposit_status,now(),now()))
+    booking_id = execute("""INSERT INTO bookings(organisation_id,site_id,guest_id,booking_date,booking_time,party_size,duration_minutes,status,source,table_id,guest_name,guest_email,guest_phone,special_requests,dietary_requirements,special_occasion,internal_notes,marketing_consent,manage_token,deposit_required,deposit_status,created_at,updated_at)
+                          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                         (u["organisation_id"],site["id"],guest_id,booking_date,booking_time,party,duration,d.get("status") or "Confirmed",d.get("source") or "Manager",table_id,name,email,phone,d.get("special_requests") or "",d.get("dietary_requirements") or "",d.get("special_occasion") or "",d.get("internal_notes") or "",1 if d.get("marketing_consent") else 0,manage_token,deposit_required,deposit_status,now(),now()))
     booking=q("SELECT * FROM bookings WHERE id=?",(booking_id,),True)
     if email and int(settings.get("confirmation_enabled") or 0):
         subject=_render_booking_text(settings.get("confirmation_subject") or "Your reservation is confirmed — {{venue_name}}",booking,site)
@@ -4275,6 +4282,8 @@ register_product_tour(app, globals())
 
 from alport_booking_diary import register_booking_diary
 register_booking_diary(app, globals())
+from alport_public_bookings import register_public_bookings
+register_public_bookings(app, globals())
 
 if __name__ == "__main__":
     app.run(

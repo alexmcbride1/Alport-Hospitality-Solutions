@@ -6,6 +6,7 @@ from flask import request,session,jsonify
 ROLES=('Owner','Admin','General Manager','Manager')
 STATUSES=('Confirmed','Arrived','Seated','Completed','Cancelled','No-show')
 SCHEMA='''
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS special_occasion TEXT DEFAULT '';
 CREATE TABLE IF NOT EXISTS alport_guest_vip(
  organisation_id BIGINT NOT NULL,guest_id BIGINT NOT NULL REFERENCES guests(id),
  vip INTEGER NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 0,
@@ -83,7 +84,7 @@ def register_booking_diary(app,env):
         u,s=context();day=valid_day(request.args.get('date') or date.today().isoformat());args=(u['organisation_id'],s['id'],day)
         rows=q('''SELECT b.id,b.guest_id,b.booking_date,b.booking_time,b.duration_minutes,b.party_size,b.status,b.source,b.table_id,
           b.guest_name,b.guest_email,b.guest_phone,b.special_requests,b.dietary_requirements,b.internal_notes,b.updated_at,
-          b.deposit_status,b.deposit_required,b.deposit_paid,b.review_sent_at,rt.table_name,rt.area,
+          b.special_occasion,b.deposit_status,b.deposit_required,b.deposit_paid,b.review_sent_at,rt.table_name,rt.area,
           COALESCE(v.vip,0) AS vip,COALESCE(v.version,0) AS vip_version,
           (SELECT COUNT(*) FROM alport_guest_site_comments n WHERE n.organisation_id=b.organisation_id AND n.site_id=b.site_id AND n.guest_id=b.guest_id) AS comment_count
           FROM bookings b LEFT JOIN restaurant_tables rt ON rt.id=b.table_id AND rt.organisation_id=b.organisation_id AND rt.site_id=b.site_id
@@ -161,7 +162,7 @@ def register_booking_diary(app,env):
     def update(booking_id):
         u,s=context();d=request.get_json(silent=True)
         if not isinstance(d,dict):raise ValueError('Send valid booking fields.')
-        fields={'status','booking_date','booking_time','party_size','duration_minutes','table_id','special_requests','dietary_requirements','internal_notes'}
+        fields={'guest_name','guest_email','guest_phone','special_occasion','status','booking_date','booking_time','party_size','duration_minutes','table_id','special_requests','dietary_requirements','internal_notes'}
         if set(d)-fields-{'expected_updated_at'}:raise ValueError('Unsupported booking field.')
         with conn() as c:
             # Same site lock used by the optional social overlap guard.
@@ -172,6 +173,9 @@ def register_booking_diary(app,env):
             changes={k:v for k,v in d.items() if k in fields}
             if not changes:raise ValueError('Nothing to update.')
             merged={**b,**changes}
+            if set(changes)&{'guest_name','guest_email','guest_phone','dietary_requirements','special_occasion'}:
+                from alport_booking_fields import validate_guest_fields
+                changes.update(validate_guest_fields(merged));merged.update(changes)
             valid_day(merged['booking_date']);valid_time(merged['booking_time']);integer(merged['party_size'],1,1000,'Covers');integer(merged['duration_minutes'],1,1440,'Duration')
             if merged['status'] not in STATUSES:raise ValueError('Choose a listed booking status.')
             for key in ('special_requests','dietary_requirements','internal_notes'):

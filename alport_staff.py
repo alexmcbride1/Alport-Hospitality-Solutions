@@ -106,7 +106,7 @@ def register_staff(app,env):
     # Fail closed for staff on every legacy/new route, not merely on navigation links.
     @app.before_request
     def restrict_staff():
-        if request.endpoint in ('static','alport_people.service_worker','alport_passkeys.config','alport_passkeys.auth_options','alport_passkeys.auth_verify'):return None
+        if request.endpoint in ('static','alport_people.service_worker','alport_passkeys.config','alport_passkeys.auth_options','alport_passkeys.auth_verify','public_book','public_booking_receipt'):return None
         u=env['user']()
         if not u:return None
         a=access(u)
