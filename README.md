@@ -31,3 +31,16 @@ Run checks with `python -m unittest discover -s tests -p 'test_team_chat.py'`.
 The integration tests use SQLite adaptation; production PostgreSQL locking
 still needs deployment validation. Rollback: revert the feature commit and
 redeploy; the added tables can remain without affecting older code.
+
+
+## Daily site workspace and team tasks
+
+`/today` provides site-scoped operational summaries, gross-basis management estimates versus budgets and the previous full month, source-date and missing-data warnings, setup progress, and access/activity views. Owners can compare their active sites. Other users need an activated staff assignment; full-profile managers see site financials, while staff see personal shortcuts. Chat grants do not grant financial access.
+
+Team chat supports explicit mentions, per-user unread positions, and one task per source message with an assignee, deadline and status. Task changes are versioned and audited; only the creator, assignee or Owner can change status. Everyone currently authorised for the room can read tasks and history. There are no email or push notifications for chat mentions. Task lists show the first 200 entries (open tasks first).
+
+New tables are created on startup under the existing advisory lock: `alport_chat_reads`, `alport_chat_mentions`, `alport_chat_tasks`, and `alport_chat_task_events`. No additional disk or service is required. Validate on PostgreSQL staging before production; SQLite integration fixtures do not exercise PostgreSQL locking.
+
+Financial estimates preserve the existing gross sales/expense basis. Stock usage uses current item costs; labour uses scheduled shifts (including overnight work), excludes cancelled/declined shifts and excludes employer costs. Full-month comparisons are labelled; missing records are not proof of zero activity. Staffing warnings identify bookings with no scheduled staff, not every possible shortage.
+
+Run `python -m unittest discover -s tests`. Browser-check Owner and staff views, chat mentions/task creation and mobile layout at 390px. The existing user guide, support form and evidence capture are reused.

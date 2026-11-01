@@ -4138,6 +4138,10 @@ register_jobs(app, globals())
 from alport_passkeys import register_passkeys
 register_passkeys(app, globals())
 
+
+from alport_experience import register_experience
+register_experience(app, globals())
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
