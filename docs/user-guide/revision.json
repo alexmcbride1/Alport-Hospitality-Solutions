@@ -1,18 +1,19 @@
 {
-  "revision": 5,
-  "captured_at": "2026-11-01T14:45:00Z",
-  "deployed_commit": "03e078b57197256390b4e33a15aedd6ccf197484",
-  "page_count": 18,
+  "revision": 6,
+  "captured_at": "2026-11-01T15:21:50.231085+00:00",
+  "deployed_commit": "12a75666b1b9f1c49184dbacea834205ab07ce61",
+  "page_count": 20,
   "live_url": "https://alporthospitality.co.uk/user-guide",
   "changes": [
-    "Grouped venue sidebar replaces top tools and floating shortcuts",
-    "Mobile More uses the same grouped navigation",
-    "Dashboard focuses on figures and alerts with expandable weather",
-    "Updated navigation screenshot and group instructions"
+    "Daily booking diary date, filters, sorting and pagination",
+    "Booking detail edits and service actions",
+    "Historical site guest search by name or phone",
+    "Saved guest VIP marking/removal and site-private comments",
+    "Explicit management role and comment privacy boundaries"
   ],
   "pending": "None for this deployed feature release; later changes need a new guide review.",
   "training_deployed_commit": "374fbee8e0fc69116306da4393d47b7a0a3a98d8",
   "training_update": "Six onboarding modules; existing screenshots remain accurate. No new production employee record or invitation created.",
   "pending_features": [],
-  "notes": "Live empty-site captures for Today, pub operations, chat and public tour. Earlier unchanged booking/stock/rota/EHO captures retained. Training remains six modules."
+  "notes": "Live empty diary captured after PR9. Booking-detail and guest-profile illustrations captured from the isolated fictional preview of the shipped UI, explicitly labelled. Other accurate screenshots retained. No production guest record, email or payment created."
 }
