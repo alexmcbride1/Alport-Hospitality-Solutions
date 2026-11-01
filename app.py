@@ -4269,6 +4269,8 @@ register_pub(app, globals())
 
 from alport_pub_planning import register_pub_planning
 register_pub_planning(app, globals())
+from alport_product_tour import register_product_tour
+register_product_tour(app, globals())
 
 if __name__ == "__main__":
     app.run(

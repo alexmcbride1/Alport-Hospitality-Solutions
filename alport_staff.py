@@ -116,7 +116,7 @@ def register_staff(app,env):
         limited=(a and a['profile'] in ('staff','orders')) or u['role'] in ('Staff','User')
         if not limited:return None
         if a:session['site_id']=a['site_id']
-        allowed={'user_guide','user_guide_download','alport_support.report_page','alport_support.report','alport_support.sent','logout','privacy_policy','alport_staff.login','alport_staff.activate',
+        allowed={'product_tour','user_guide','user_guide_download','alport_support.report_page','alport_support.report','alport_support.sent','logout','privacy_policy','alport_staff.login','alport_staff.activate',
                  'alport_staff.portal','alport_staff.me','alport_staff.request_leave','alport_staff.withdraw',
                  'alport_staff.orders','alport_staff.order_detail','alport_staff.new_order','alport_staff.password','alport_staff.compliance','alport_staff.training','staff_onboarding_portal','staff_onboarding_details','staff_training_submit'} | eho_endpoints
         if request.endpoint=='app_home':return redirect('/staff')
