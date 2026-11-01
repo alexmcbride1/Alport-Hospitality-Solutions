@@ -3872,11 +3872,12 @@ def weather():
         try:
             gr = requests.get(
                 geo_url,
-                params={"name": address, "count": 1, "language": "en", "format": "json"},
+                params={"name": address, "count": 10, "language": "en", "format": "json", "countryCode": "GB"},
                 timeout=10,
             )
             gr.raise_for_status()
-            results = gr.json().get("results") or []
+            results = [place for place in (gr.json().get("results") or [])
+                       if place.get("country_code") == "GB"]
             if not results:
                 return jsonify(
                     error="Could not find the site location. Allow browser location access or update the site address."
