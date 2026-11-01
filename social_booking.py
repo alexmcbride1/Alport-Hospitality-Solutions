@@ -7,7 +7,10 @@ PROMPTS={
  'time':'What time would you like? Please use 24-hour format, for example 19:30.',
  'party':'How many guests, including children?',
  'name':'What name should the reservation be under?',
- 'contact':'Please provide a contact email or phone number for the booking.',
+ 'contact':'Please provide your email address for the booking.',
+ 'phone':'Please provide your contact phone number.',
+ 'allergies':'Does anyone have allergies or dietary needs? Enter the details, or NONE. Please also discuss allergies with the venue; recording them does not guarantee an allergen-free meal.',
+ 'occasion':'Are you celebrating a special occasion? Enter the details, or NO SPECIAL OCCASION.',
  'requests':'Any seating or accessibility requests? Reply NONE if not. Please discuss allergies directly with the venue; do not send medical details here.',
 }
 def localnow():return datetime.now(ZONE)
@@ -63,7 +66,7 @@ def advance(state,text,check,find_alternatives,book,at=None):
  if s.get('stage')=='human':
   if low=='new booking':s={}
   else:return s,None
- if re.search(r'\b(staff|human|manager|cancel|change|amend|allergy|allergies|allergic)\b',low):return {**s,'stage':'human'},'I have flagged this for the venue team. No booking has been changed or cancelled. Please contact the venue directly if urgent.'
+ if re.search(r'\b(staff|human|manager|cancel|change|amend)\b',low) or (s.get('stage')!='allergies' and re.search(r'\b(allergy|allergies|allergic)\b',low)):return {**s,'stage':'human'},'I have flagged this for the venue team. No booking has been changed or cancelled. Please contact the venue directly if urgent.'
  if low=='stop':return {**s,'stage':'human'},'Automated replies are paused. No existing booking has been cancelled.'
  if s.get('stage')=='booked':
   if low!='new booking':return s,'Your reservation is already recorded. Reply NEW BOOKING for another reservation, or STAFF for help with the existing one.'
@@ -85,8 +88,17 @@ def advance(state,text,check,find_alternatives,book,at=None):
    if not 2<=len(text)<=100 or '@' in text:raise ValueError()
    d['name']=text;stage='contact'
   elif stage=='contact':
-   if not (re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',text) or (re.fullmatch(r'\+?[\d ()-]{7,25}',text) and 7<=sum(c.isdigit() for c in text)<=15)):raise ValueError()
-   d['contact']=text;stage='requests'
+   if len(text)>200 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',text):raise ValueError()
+   d['email']=text.lower();d['contact']=text.lower();stage='phone'
+  elif stage=='phone':
+   if len(text)>60 or not re.fullmatch(r'[+0-9().\s-]+',text) or not 7<=sum(c.isdigit() for c in text)<=15:raise ValueError()
+   d['phone']=text;stage='allergies'
+  elif stage=='allergies':
+   if not 1<=len(text)<=1000:raise ValueError()
+   d['allergies']=text;stage='occasion'
+  elif stage=='occasion':
+   if not 1<=len(text)<=500:raise ValueError()
+   d['occasion']=text;stage='requests'
   elif stage=='requests':
    if low not in ('none','no','no thanks'):return {'stage':'human','details':d},'Your request needs the venue team to check it. I’ve flagged the conversation; a table is not yet booked.'
    stage='check'
@@ -96,6 +108,9 @@ def advance(state,text,check,find_alternatives,book,at=None):
   elif stage=='confirm':
    if low=='restart':return {'stage':'date'},PROMPTS['date']
    if low!='confirm':return s,'Reply CONFIRM to book those exact details, RESTART to enter different details, or STAFF for help.'
+   from alport_booking_fields import validate_guest_fields
+   try:validate_guest_fields(dict(guest_name=d.get('name'),guest_email=d.get('email'),guest_phone=d.get('phone'),dietary_requirements=d.get('allergies'),special_occasion=d.get('occasion')))
+   except ValueError:return {'stage':'date'},'Please restart so we can collect the required contact, allergies and occasion answers. '+PROMPTS['date']
    tables,reason=check(d)
    if tables:
     bid=book(d,tables[0]);return {'stage':'booked','booking_id':bid,'details':d},'Your table is booked. '+summary(d)+f' Booking reference: ALP-{bid}. Reply STAFF for changes or cancellations.'

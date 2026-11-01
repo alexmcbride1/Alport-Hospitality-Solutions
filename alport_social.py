@@ -248,9 +248,9 @@ def register_social(app,host):
    if t['last_inbound'] and e['sent_at']-t['last_inbound']>86400000 and state.get('stage') not in ('booked','human'):state={}
    def book(d,table):
     cfg=c.execute('SELECT * FROM booking_settings WHERE organisation_id=%s AND site_id=%s',(conn['organisation_id'],conn['site_id'])).fetchone();ts=stamp()
-    email=d['contact'] if '@' in d['contact'] else '';phone=d['contact'] if not email else ''
+    email=d['email'];phone=d['phone']
     guest=c.execute('INSERT INTO guests(organisation_id,name,email,phone,marketing_consent,created_at,updated_at) VALUES(%s,%s,%s,%s,0,%s,%s) RETURNING id',(conn['organisation_id'],d['name'],email,phone,ts,ts)).fetchone()['id']
-    return c.execute("INSERT INTO bookings(organisation_id,site_id,guest_id,booking_date,booking_time,party_size,duration_minutes,status,source,table_id,guest_name,guest_email,guest_phone,manage_token,created_at,updated_at) VALUES(%s,%s,%s,%s,%s,%s,%s,'Confirmed',%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",(conn['organisation_id'],conn['site_id'],guest,d['date'],d['time'],d['party'],cfg['default_duration'],e['channel'].title(),table['id'],d['name'],email,phone,secrets.token_urlsafe(32),ts,ts)).fetchone()['id']
+    return c.execute("INSERT INTO bookings(organisation_id,site_id,guest_id,booking_date,booking_time,party_size,duration_minutes,status,source,table_id,guest_name,guest_email,guest_phone,dietary_requirements,special_occasion,manage_token,created_at,updated_at) VALUES(%s,%s,%s,%s,%s,%s,%s,'Confirmed',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",(conn['organisation_id'],conn['site_id'],guest,d['date'],d['time'],d['party'],cfg['default_duration'],e['channel'].title(),table['id'],d['name'],email,phone,d['allergies'],d['occasion'],secrets.token_urlsafe(32),ts,ts)).fetchone()['id']
    new,reply=engine.advance(state,dec(e['payload']),lambda d:engine.options(c,conn['organisation_id'],conn['site_id'],d),lambda d:engine.alternatives(c,conn['organisation_id'],conn['site_id'],d),book)
    c.execute('UPDATE alport_social_threads SET state=%s,last_inbound=%s WHERE id=%s',(enc(new),e['sent_at'],t['id']))
    if reply:c.execute('INSERT INTO alport_social_outbox(event_id,thread_id,body) VALUES(%s,%s,%s) ON CONFLICT(event_id) DO NOTHING',(e['id'],t['id'],enc(reply)))
