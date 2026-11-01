@@ -36,4 +36,4 @@ $('saveProfile').onclick=()=>task($('saveProfile'),async()=>{const overrides={};
 $('loadWeather').onclick=()=>task($('loadWeather'),async()=>{const w=await api('/api/demand/context/weather',{});showForecastWeather(w);forecastPreview=null;$('saveDraft').disabled=true;message('Weather loaded. Check the location, then recalculate suggestions.');});
 loadForecastContext().catch(e=>message(e.message,true));
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());$('start').value=today;$('end').value=today;loadCatalogue().catch(e=>message(e.message,true));
-</script></body></html>
+</script>{% include 'assistant_widget.html' %}</body></html>

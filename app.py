@@ -43,7 +43,7 @@ PRIVACY_TRADING_NAME = os.environ.get("PRIVACY_TRADING_NAME", "Alport Hospitalit
 PRIVACY_EMAIL = os.environ.get("PRIVACY_EMAIL", "")
 PRIVACY_ADDRESS = os.environ.get("PRIVACY_ADDRESS", "")
 PRIVACY_ICO_NUMBER = os.environ.get("PRIVACY_ICO_NUMBER", "")
-PRIVACY_EFFECTIVE_DATE = os.environ.get("PRIVACY_EFFECTIVE_DATE", "10 September 2026")
+PRIVACY_EFFECTIVE_DATE = os.environ.get("PRIVACY_EFFECTIVE_DATE", "24 October 2026")
 
 
 def conn():
@@ -1721,7 +1721,11 @@ def app_home():
         session.clear()
         return redirect(url_for("login"))
     if not request.args.get("setup_section") and app.extensions.get("alport_needs_setup", lambda: False)():
-        return redirect("/setup")
+        if u['role'] == 'Owner':
+            if not app.extensions.get('alport_ai_onboarded', lambda: False)():
+                return redirect('/assistant/setup')
+        else:
+            return redirect("/setup")
     return render_template("app.html", user=u, organisation=org(), site=current_site())
 
 
@@ -4102,3 +4106,7 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 10000)),
     )
+
+# Private role-aware assistant and guided launch workspace.
+from alport_assistant import register_assistant
+register_assistant(app, globals())
