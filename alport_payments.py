@@ -12,6 +12,7 @@ from functools import wraps
 from urllib.parse import urlencode, quote, urlparse
 
 import requests
+from alport_payroll_inputs import period_bounds, prepare_hours
 from flask import Blueprint, request, session, jsonify, render_template, redirect, Response
 
 SCHEMA = """
@@ -375,6 +376,36 @@ def register_payments(app, host):
             d.update(status='Verified',verified_by=u['id'],verified_at=stamp())
             put(c,scope,'beneficiary',d,rid);event(c,scope,u['id'],rid,'Recipient verified',evidence)
         return jsonify(ok=True)
+
+    @bp.get('/api/money/payroll-inputs')
+    @guard
+    def payroll_inputs():
+        u, s, scope = context()
+        finance(u)
+        start, end = request.args.get('period_start'), request.args.get('period_end')
+        lower, upper = period_bounds(start, end)
+        with db() as c:
+            rows = c.execute("""
+                SELECT a.*, e.name, e.pay_type, e.pay_rate
+                FROM alport_attendance a JOIN employees e
+                  ON e.id=a.employee_id AND e.organisation_id=a.organisation_id AND e.site_id=a.site_id
+                WHERE a.organisation_id=%s AND a.site_id=%s
+                  AND a.in_at::timestamptz < %s
+                  AND (a.out_at IS NULL OR a.out_at::timestamptz > %s)
+                  AND a.status != 'Rejected'
+                ORDER BY a.employee_id, a.in_at::timestamptz, a.id
+            """, (*scope, upper, lower)).fetchall()
+        result = prepare_hours(rows, start, end)
+        result['setup_required'] = [
+            'Connect a UK payroll provider and map the legal employer and employees.',
+            'Verify employer PAYE registration, HMRC credentials and workplace pension setup.',
+            'Validate tax codes, NI categories, year-to-date pay, pension assessment and other deductions.',
+            'Review approved tronc and any separate tronc PAYE scheme.',
+            'Connect and validate Yapily and the employer bank before approving any payment.'
+        ]
+        response = jsonify(result)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
 
     @bp.post('/api/money/payroll')
     @guard
